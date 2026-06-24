@@ -1,0 +1,9 @@
+menu "GPIO configuration"
+	config LED_GPIO
+	int "GPIO pin"
+	default 9
+
+	config ONBOARD_LED_GPIO
+	int "Onboard GPIO pin"
+	default 21
+endmenu
