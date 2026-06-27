@@ -1,2 +1,2 @@
-idf_component_register(SRCS "VL53L7CX.c"
+idf_component_register(SRCS "platform.c" "vl53l7cx_api.c"
                     INCLUDE_DIRS "include")
