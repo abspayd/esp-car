@@ -11,6 +11,7 @@
  */
 
 #include "vl53l7cx_api.h"
+#include "driver/i2c_master.h"
 #include "vl53l7cx_buffers.h"
 #include <stdlib.h>
 #include <string.h>
@@ -386,7 +387,15 @@ uint8_t vl53l7cx_set_i2c_address(VL53L7CX_Configuration *p_dev,
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x00);
     status |=
         VL53L7CX_WrByte(&(p_dev->platform), 0x4, (uint8_t)(i2c_address >> 1));
+
     p_dev->platform.address = i2c_address;
+    esp_err_t err = i2c_master_device_change_address(
+        p_dev->platform.dev_handle, i2c_address, p_dev->platform.timeout_ms);
+
+    if (err != ESP_OK) {
+        status |= 1;
+    }
+
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x02);
 
     return status;

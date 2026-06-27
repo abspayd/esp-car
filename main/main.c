@@ -2,12 +2,15 @@
 #include "driver/i2c_master.h"
 #include "driver/i2c_types.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
 #include "hal/i2c_types.h"
+#include "platform.h"
 #include "portmacro.h"
+#include "vl53l7cx_api.h"
 #include <stdio.h>
 
 #define LED_GPIO CONFIG_LED_GPIO
@@ -25,6 +28,8 @@ typedef struct {
     uint32_t gpio_pin;
 } blink_config_t;
 
+static VL53L7CX_Configuration vl53l7cx_dev;
+
 static void blink_task(void *args) {
     char *taskName = pcTaskGetName(NULL);
     ESP_LOGI(taskName, "Beginning blink task on GPIO pin %d", LED_GPIO);
@@ -32,6 +37,9 @@ static void blink_task(void *args) {
     blink_config_t *config = (blink_config_t *)args;
 
     gpio_set_direction(config->gpio_pin, GPIO_MODE_OUTPUT);
+    UBaseType_t uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+
+    ESP_LOGI(taskName, "task stack high watermark: %d", uxHighWaterMark);
 
     for (;;) {
         uint32_t core_id = xPortGetCoreID();
@@ -52,7 +60,7 @@ void app_main(void) {
         .delay = 500 / portTICK_PERIOD_MS,
         .gpio_pin = ONBOARD_LED_GPIO,
     };
-    xTaskCreate(blink_task, "led1", 2048, (void *)&blink_config_1, 1, NULL);
+    xTaskCreate(blink_task, "led1", 1024 * 2, (void *)&blink_config_1, 1, NULL);
 
     i2c_master_bus_config_t i2c_mst_config = {
         .clk_source = I2C_CLK_SRC_DEFAULT,
@@ -73,18 +81,81 @@ void app_main(void) {
         .device_address = VL53L7CX_ADDRESS,
         .scl_speed_hz = 100 * 1000,
     };
+
     i2c_master_dev_handle_t dev_handle;
     ESP_ERROR_CHECK(
         i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev_handle));
 
-    ESP_ERROR_CHECK(i2c_master_probe(bus_handle, VL53L7CX_ADDRESS, 100));
+    vl53l7cx_dev.platform = (VL53L7CX_Platform){
+        .timeout_ms = 1000,
+        .address = VL53L7CX_ADDRESS,
+        .dev_handle = dev_handle,
+    };
 
-    uint8_t buf[20];
-    memset(buf, 0, 20);
-    i2c_master_receive(dev_handle, buf, 20, -1);
+    uint8_t isAlive, status;
+    gpio_set_direction(CONFIG_LPN_GPIO, GPIO_MODE_OUTPUT);
 
-    for (int i = 0; i < 20; i++) {
-        printf("0x%02x\n", buf[i]);
+    status = vl53l7cx_is_alive(&vl53l7cx_dev, &isAlive);
+    if (!isAlive || status) {
+        printf("VL53L7CX not detected at requested address\n");
+        return;
+    }
+    printf("Found VL53L7CX device!\n");
+
+    status = vl53l7cx_init(&vl53l7cx_dev);
+    if (status) {
+        printf("Failed to init VL53L7CX\n");
+        return;
+    }
+    printf("Initialized VL53L7CX!\n");
+
+    uint8_t current_resolution;
+    status = vl53l7cx_get_resolution(&vl53l7cx_dev, &current_resolution);
+    if (status) {
+        printf("Failed to get resolution\n");
+        return;
+    }
+    printf("Resolution: %d\n", current_resolution);
+
+    status = vl53l7cx_start_ranging(&vl53l7cx_dev);
+    if (status) {
+        printf("Failed to start ranging session\n");
+        return;
+    }
+
+    for (;;) {
+        uint8_t is_ready;
+        status = vl53l7cx_check_data_ready(&vl53l7cx_dev, &is_ready);
+        if (status || !is_ready) {
+            continue;
+        }
+
+        printf("Got results\n");
+
+        VL53L7CX_ResultsData results;
+        vl53l7cx_get_ranging_data(&vl53l7cx_dev, &results);
+
+        printf("Results #%d\n", vl53l7cx_dev.streamcount);
+        printf("  Status:\n");
+        for (int i = 0; i < 16; i += 4) {
+            printf(
+                "    %d %d %d %d\n",
+                results.target_status[i * VL53L7CX_NB_TARGET_PER_ZONE],
+                results.target_status[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
+                results.target_status[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
+                results.target_status[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE]);
+        }
+
+        printf("  Distance:\n");
+        for (int i = 0; i < 16; i += 4) {
+            printf("    %d %d %d %d\n",
+                   results.distance_mm[i * VL53L7CX_NB_TARGET_PER_ZONE],
+                   results.distance_mm[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
+                   results.distance_mm[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
+                   results.distance_mm[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE]);
+        }
+
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
     // i2c_device_config_t dev_cfg = {

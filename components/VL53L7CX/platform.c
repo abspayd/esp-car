@@ -11,39 +11,86 @@
  */
 
 #include "platform.h"
+#include "driver/i2c_master.h"
+#include "freertos/idf_additions.h"
 
 uint8_t VL53L7CX_RdByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
                         uint8_t *p_value) {
-    uint8_t status = 255;
+    uint8_t status = 0;
 
-    /* Need to be implemented by customer. This function returns 0 if OK */
+    // esp_err_t error = i2c_master_receive(p_platform->dev_handle, p_value, 1,
+    //                                      p_platform->timeout_ms);
+    uint8_t buf[2] = {
+        (uint8_t)(RegisterAdress >> 8),
+        (uint8_t)(RegisterAdress & 0xFF),
+    };
+
+    esp_err_t error = i2c_master_transmit_receive(
+        p_platform->dev_handle, buf, 2, p_value, 1, p_platform->timeout_ms);
+    if (error != ESP_OK) {
+        status |= 1;
+    }
 
     return status;
 }
 
 uint8_t VL53L7CX_WrByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
                         uint8_t value) {
-    uint8_t status = 255;
+    uint8_t status = 0;
 
-    /* Need to be implemented by customer. This function returns 0 if OK */
+    uint8_t buf[3] = {
+        (uint8_t)(RegisterAdress >> 8),
+        (uint8_t)(RegisterAdress & 0xFF),
+        value,
+    };
+
+    esp_err_t error = i2c_master_transmit(p_platform->dev_handle, buf, 3,
+                                          p_platform->timeout_ms);
+    if (error != ESP_OK) {
+        status |= 1;
+    }
 
     return status;
 }
 
 uint8_t VL53L7CX_WrMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
                          uint8_t *p_values, uint32_t size) {
-    uint8_t status = 255;
+    uint8_t status = 0;
 
-    /* Need to be implemented by customer. This function returns 0 if OK */
+    uint8_t *buf = malloc(size + 2);
+    if (buf == NULL) {
+        return 1;
+    }
+
+    buf[0] = (uint8_t)(RegisterAdress >> 8);
+    buf[1] = (uint8_t)(RegisterAdress & 0xFF);
+    memcpy(&buf[2], p_values, size);
+
+    esp_err_t error = i2c_master_transmit(p_platform->dev_handle, buf, size + 2,
+                                          p_platform->timeout_ms);
+
+    free(buf);
+
+    if (error != ESP_OK) {
+        status |= 1;
+    }
 
     return status;
 }
 
 uint8_t VL53L7CX_RdMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
                          uint8_t *p_values, uint32_t size) {
-    uint8_t status = 255;
+    uint8_t status = 0;
 
-    /* Need to be implemented by customer. This function returns 0 if OK */
+    uint8_t buf[2] = {
+        (uint8_t)(RegisterAdress >> 8),
+        (uint8_t)(RegisterAdress & 0xFF),
+    };
+    esp_err_t error = i2c_master_transmit_receive(
+        p_platform->dev_handle, buf, 2, p_values, size, p_platform->timeout_ms);
+    if (error != ESP_OK) {
+        status |= 1;
+    }
 
     return status;
 }
@@ -80,9 +127,8 @@ void VL53L7CX_SwapBuffer(uint8_t *buffer, uint16_t size) {
 }
 
 uint8_t VL53L7CX_WaitMs(VL53L7CX_Platform *p_platform, uint32_t TimeMs) {
-    uint8_t status = 255;
 
-    /* Need to be implemented by customer. This function returns 0 if OK */
+    vTaskDelay(TimeMs / portTICK_PERIOD_MS);
 
-    return status;
+    return 0;
 }

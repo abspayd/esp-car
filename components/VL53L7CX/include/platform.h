@@ -14,6 +14,7 @@
 #define _PLATFORM_H_
 #pragma once
 
+#include "driver/i2c_master.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -30,6 +31,8 @@ typedef struct {
      * needs to be added */
     /* Example for most standard platform : I2C address of sensor */
     uint16_t address;
+    uint32_t timeout_ms;
+    i2c_master_dev_handle_t dev_handle;
 
 } VL53L7CX_Platform;
 

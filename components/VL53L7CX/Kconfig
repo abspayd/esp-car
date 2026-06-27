@@ -1,0 +1,5 @@
+menu "VL53L7CX Configuration"
+	config LPN_GPIO
+	int "LPn GPIO pin"
+	default 43
+endmenu
