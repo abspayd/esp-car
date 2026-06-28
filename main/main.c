@@ -2,11 +2,9 @@
 #include "driver/i2c_master.h"
 #include "driver/i2c_types.h"
 #include "esp_err.h"
-#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
-#include "freertos/projdefs.h"
 #include "hal/i2c_types.h"
 #include "platform.h"
 #include "portmacro.h"
@@ -43,9 +41,6 @@ static void blink_task(void *args) {
     ESP_LOGI(taskName, "task stack high watermark: %d", uxHighWaterMark);
 
     for (;;) {
-        uint32_t core_id = xPortGetCoreID();
-        ESP_LOGI(taskName, "Current core: %d", core_id);
-
         vTaskDelay((TickType_t)config->delay);
         gpio_set_level(config->gpio_pin, 1);
         vTaskDelay((TickType_t)config->delay);
@@ -92,8 +87,9 @@ void app_main(void) {
         .dev_handle = dev_handle,
     };
 
-    uint8_t isAlive, status;
+    vTaskDelay(100 / portTICK_PERIOD_MS);
 
+    uint8_t isAlive, status;
     VL53L7CX_Reset_Sensor(&vl53l7cx_dev.platform);
 
     status = vl53l7cx_is_alive(&vl53l7cx_dev, &isAlive);
@@ -110,6 +106,13 @@ void app_main(void) {
     }
     printf("Initialized VL53L7CX!\n");
 
+    status = vl53l7cx_set_resolution(&vl53l7cx_dev, VL53L7CX_RESOLUTION_8X8);
+    if (status) {
+        printf("Failed to set resolution\n");
+        return;
+    }
+    printf("Updated resolution\n");
+
     uint8_t current_resolution;
     status = vl53l7cx_get_resolution(&vl53l7cx_dev, &current_resolution);
     if (status) {
@@ -117,6 +120,12 @@ void app_main(void) {
         return;
     }
     printf("Resolution: %d\n", current_resolution);
+
+    status = vl53l7cx_set_ranging_frequency_hz(&vl53l7cx_dev, 15);
+    if (status) {
+        printf("Failed to set ranging frequency\n");
+        return;
+    }
 
     status = vl53l7cx_start_ranging(&vl53l7cx_dev);
     if (status) {
@@ -126,6 +135,7 @@ void app_main(void) {
 
     gpio_set_direction(VL53L7CX_INTERRUPT_GPIO, GPIO_MODE_INPUT);
 
+    printf("\e[2J\e[H");
     for (;;) {
 
         if (gpio_get_level(VL53L7CX_INTERRUPT_GPIO) != 0) {
@@ -139,29 +149,50 @@ void app_main(void) {
         //     continue;
         // }
 
-        printf("Got results\n");
+        // printf("Got results\n");
 
         VL53L7CX_ResultsData results;
         vl53l7cx_get_ranging_data(&vl53l7cx_dev, &results);
 
-        printf("Results #%d\n", vl53l7cx_dev.streamcount);
-        printf("Status:\n");
-        for (int i = 0; i < 16; i += 4) {
-            printf(
-                "| %02u %02u %02u %02u |\n",
-                results.target_status[i * VL53L7CX_NB_TARGET_PER_ZONE],
-                results.target_status[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
-                results.target_status[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
-                results.target_status[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE]);
-        }
+        // for (int i = 0; i < 64; i += 4) {
+        //     printf(
+        //         "| %03u %03u %03u %03u %03u %03u %03u %03u |\n",
+        //         results.target_status[i * VL53L7CX_NB_TARGET_PER_ZONE],
+        //         results.target_status[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
+        //         results.target_status[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
+        //         results.target_status[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE],
+        //         results.target_status[(i + 4) * VL53L7CX_NB_TARGET_PER_ZONE],
+        //         results.target_status[(i + 5) * VL53L7CX_NB_TARGET_PER_ZONE],
+        //         results.target_status[(i + 6) * VL53L7CX_NB_TARGET_PER_ZONE],
+        //         results.target_status[(i + 7) *
+        //         VL53L7CX_NB_TARGET_PER_ZONE]);
+        // }
+        // printf("-----------------------\n");
+        // for (int i = 0; i < 64; i += 4) {
+        //     printf("| %04d %04d %04d %04d %04d %04d %04d %04d |\n",
+        //            results.distance_mm[i * VL53L7CX_NB_TARGET_PER_ZONE],
+        //            results.distance_mm[(i + 1) *
+        //            VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i + 2)
+        //            * VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i +
+        //            3) * VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i
+        //            + 4) * VL53L7CX_NB_TARGET_PER_ZONE],
+        //            results.distance_mm[(i + 5) *
+        //            VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i + 6)
+        //            * VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i +
+        //            7) * VL53L7CX_NB_TARGET_PER_ZONE]);
+        // }
 
-        printf("Distance:\n");
-        for (int i = 0; i < 16; i += 4) {
-            printf("| %04d %04d %04d %04d |\n",
-                   results.distance_mm[i * VL53L7CX_NB_TARGET_PER_ZONE],
-                   results.distance_mm[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
-                   results.distance_mm[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
-                   results.distance_mm[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE]);
+        printf("\e[H");
+        for (int i = 0; i < 64; i += 8) {
+            for (int j = 0; j < 8; j++) {
+                int k = (i + j) * VL53L7CX_NB_TARGET_PER_ZONE;
+                int dist = results.target_status[k] == 5 ||
+                                   results.target_status[k] == 9
+                               ? results.distance_mm[k]
+                               : -1;
+                printf("%04d ", dist);
+            }
+            printf("\n");
         }
     }
 
