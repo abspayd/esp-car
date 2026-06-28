@@ -390,7 +390,7 @@ uint8_t vl53l7cx_set_i2c_address(VL53L7CX_Configuration *p_dev,
 
     p_dev->platform.address = i2c_address;
     esp_err_t err = i2c_master_device_change_address(
-        p_dev->platform.dev_handle, i2c_address, p_dev->platform.timeout_ms);
+        p_dev->platform.dev_handle, i2c_address, VL53L7CX_REQUEST_TIMEOUT_MS);
 
     if (err != ESP_OK) {
         status |= 1;

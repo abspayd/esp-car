@@ -22,6 +22,7 @@
 #define BNO058_ADDRESS 0x4A
 
 #define VL53L7CX_ADDRESS 0x52 >> 1
+#define VL53L7CX_INTERRUPT_GPIO CONFIG_VL53L7CX_INTERRUPT_GPIO
 
 typedef struct {
     uint32_t delay;
@@ -87,13 +88,13 @@ void app_main(void) {
         i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev_handle));
 
     vl53l7cx_dev.platform = (VL53L7CX_Platform){
-        .timeout_ms = 1000,
         .address = VL53L7CX_ADDRESS,
         .dev_handle = dev_handle,
     };
 
     uint8_t isAlive, status;
-    gpio_set_direction(CONFIG_LPN_GPIO, GPIO_MODE_OUTPUT);
+
+    VL53L7CX_Reset_Sensor(&vl53l7cx_dev.platform);
 
     status = vl53l7cx_is_alive(&vl53l7cx_dev, &isAlive);
     if (!isAlive || status) {
@@ -123,12 +124,20 @@ void app_main(void) {
         return;
     }
 
+    gpio_set_direction(VL53L7CX_INTERRUPT_GPIO, GPIO_MODE_INPUT);
+
     for (;;) {
-        uint8_t is_ready;
-        status = vl53l7cx_check_data_ready(&vl53l7cx_dev, &is_ready);
-        if (status || !is_ready) {
+
+        if (gpio_get_level(VL53L7CX_INTERRUPT_GPIO) != 0) {
+            vTaskDelay(1 / portTICK_PERIOD_MS);
             continue;
         }
+
+        // uint8_t is_ready;
+        // status = vl53l7cx_check_data_ready(&vl53l7cx_dev, &is_ready);
+        // if (status || !is_ready) {
+        //     continue;
+        // }
 
         printf("Got results\n");
 
@@ -136,26 +145,24 @@ void app_main(void) {
         vl53l7cx_get_ranging_data(&vl53l7cx_dev, &results);
 
         printf("Results #%d\n", vl53l7cx_dev.streamcount);
-        printf("  Status:\n");
+        printf("Status:\n");
         for (int i = 0; i < 16; i += 4) {
             printf(
-                "    %d %d %d %d\n",
+                "| %02u %02u %02u %02u |\n",
                 results.target_status[i * VL53L7CX_NB_TARGET_PER_ZONE],
                 results.target_status[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
                 results.target_status[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
                 results.target_status[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE]);
         }
 
-        printf("  Distance:\n");
+        printf("Distance:\n");
         for (int i = 0; i < 16; i += 4) {
-            printf("    %d %d %d %d\n",
+            printf("| %04d %04d %04d %04d |\n",
                    results.distance_mm[i * VL53L7CX_NB_TARGET_PER_ZONE],
                    results.distance_mm[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
                    results.distance_mm[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
                    results.distance_mm[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE]);
         }
-
-        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
     // i2c_device_config_t dev_cfg = {

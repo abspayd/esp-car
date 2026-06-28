@@ -1,5 +1,13 @@
 menu "VL53L7CX Configuration"
-	config LPN_GPIO
+	config VL53L7CX_LPN_GPIO
 	int "LPn GPIO pin"
 	default 43
+
+	config VL53L7CX_REQUEST_TIMEOUT_MS
+	int "I2C request timeout in milliseconds"
+	default 100
+
+	config VL53L7CX_INTERRUPT_GPIO
+	int "VL53L7CX interrupt GPIO pin"
+	default 4
 endmenu

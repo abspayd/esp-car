@@ -18,6 +18,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#define VL53L7CX_REQUEST_TIMEOUT_MS CONFIG_VL53L7CX_REQUEST_TIMEOUT_MS
+#define VL53L7CX_LPN_GPIO_NUM CONFIG_VL53L7CX_LPN_GPIO
+
 /**
  * @brief Structure VL53L7CX_Platform needs to be filled by the customer,
  * depending on his platform. At least, it contains the VL53L7CX I2C address.
@@ -31,7 +34,6 @@ typedef struct {
      * needs to be added */
     /* Example for most standard platform : I2C address of sensor */
     uint16_t address;
-    uint32_t timeout_ms;
     i2c_master_dev_handle_t dev_handle;
 
 } VL53L7CX_Platform;
