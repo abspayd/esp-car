@@ -1,3 +1,4 @@
+#include "BNO085.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/i2c_types.h"
@@ -16,7 +17,7 @@
 
 #define I2C_MASTER_SDA_GPIO GPIO_NUM_5
 #define I2C_MASTER_SCL_GPIO GPIO_NUM_6
-#define BNO085_HOST_INTN GPIO_NUM_43
+#define BNO085_HOST_INTN CONFIG_BNO085_INTERRUPT_GPIO
 #define BNO058_ADDRESS 0x4A
 
 #define VL53L7CX_ADDRESS 0x52 >> 1
@@ -48,6 +49,89 @@ static void blink_task(void *args) {
     }
 }
 
+static void tof_task(void *args) {
+    char *taskName = pcTaskGetName(NULL);
+
+    UBaseType_t uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+    ESP_LOGI(taskName, "task stack high watermark: %d", uxHighWaterMark);
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    uint8_t isAlive, status;
+    VL53L7CX_Reset_Sensor(&vl53l7cx_dev.platform);
+
+    uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
+    ESP_LOGI(taskName, "task stack high watermark: %d", uxHighWaterMark);
+
+    status = vl53l7cx_is_alive(&vl53l7cx_dev, &isAlive);
+    if (!isAlive || status) {
+        printf("VL53L7CX not detected at requested address\n");
+        vTaskDelete(NULL);
+    }
+    printf("Found VL53L7CX device!\n");
+
+    status = vl53l7cx_init(&vl53l7cx_dev);
+    if (status) {
+        printf("Failed to init VL53L7CX\n");
+        vTaskDelete(NULL);
+    }
+    printf("Initialized VL53L7CX!\n");
+
+    status = vl53l7cx_set_resolution(&vl53l7cx_dev, VL53L7CX_RESOLUTION_8X8);
+    if (status) {
+        printf("Failed to set resolution\n");
+        vTaskDelete(NULL);
+    }
+    printf("Updated resolution\n");
+
+    uint8_t current_resolution;
+    status = vl53l7cx_get_resolution(&vl53l7cx_dev, &current_resolution);
+    if (status) {
+        printf("Failed to get resolution\n");
+        vTaskDelete(NULL);
+    }
+    printf("Resolution: %d\n", current_resolution);
+
+    status = vl53l7cx_set_ranging_frequency_hz(&vl53l7cx_dev, 15);
+    if (status) {
+        printf("Failed to set ranging frequency\n");
+        vTaskDelete(NULL);
+    }
+
+    status = vl53l7cx_start_ranging(&vl53l7cx_dev);
+    if (status) {
+        printf("Failed to start ranging session\n");
+        vTaskDelete(NULL);
+    }
+
+    gpio_set_direction(VL53L7CX_INTERRUPT_GPIO, GPIO_MODE_INPUT);
+
+    printf("\e[2J\e[H");
+    for (;;) {
+
+        if (gpio_get_level(VL53L7CX_INTERRUPT_GPIO) != 0) {
+            vTaskDelay(1 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        VL53L7CX_ResultsData results;
+        vl53l7cx_get_ranging_data(&vl53l7cx_dev, &results);
+
+        printf("\e[H");
+        for (int i = 0; i < 64; i += 8) {
+            for (int j = 0; j < 8; j++) {
+                int k = (i + j) * VL53L7CX_NB_TARGET_PER_ZONE;
+                int dist = results.target_status[k] == 5 ||
+                                   results.target_status[k] == 9
+                               ? results.distance_mm[k]
+                               : -1;
+                printf("%04d ", dist);
+            }
+            printf("\n");
+        }
+    }
+}
+
 void app_main(void) {
     char *taskName = pcTaskGetName(NULL);
     ESP_LOGI(taskName, "Start");
@@ -72,129 +156,37 @@ void app_main(void) {
 
     gpio_set_direction(BNO085_HOST_INTN, GPIO_MODE_INPUT);
 
-    i2c_device_config_t dev_cfg = {
+    i2c_device_config_t vl53l7cx_dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = VL53L7CX_ADDRESS,
         .scl_speed_hz = 100 * 1000,
     };
 
-    i2c_master_dev_handle_t dev_handle;
-    ESP_ERROR_CHECK(
-        i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev_handle));
+    i2c_master_dev_handle_t vl53l7cx_handle;
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &vl53l7cx_dev_cfg,
+                                              &vl53l7cx_handle));
 
     vl53l7cx_dev.platform = (VL53L7CX_Platform){
         .address = VL53L7CX_ADDRESS,
-        .dev_handle = dev_handle,
+        .dev_handle = vl53l7cx_handle,
     };
 
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    // xTaskCreate(tof_task, "tof", 1024 * 3, NULL, 2, NULL);
 
-    uint8_t isAlive, status;
-    VL53L7CX_Reset_Sensor(&vl53l7cx_dev.platform);
+    i2c_device_config_t bno085_dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = BNO058_ADDRESS,
+        .scl_speed_hz = 100 * 1000,
+    };
+    i2c_master_dev_handle_t bno085_handle;
+    ESP_ERROR_CHECK(
+        i2c_master_bus_add_device(bus_handle, &bno085_dev_cfg, &bno085_handle));
+    bno085_config_t bno085_dev = {
+        .address = BNO058_ADDRESS,
+        .dev_handle = bno085_handle,
 
-    status = vl53l7cx_is_alive(&vl53l7cx_dev, &isAlive);
-    if (!isAlive || status) {
-        printf("VL53L7CX not detected at requested address\n");
-        return;
-    }
-    printf("Found VL53L7CX device!\n");
-
-    status = vl53l7cx_init(&vl53l7cx_dev);
-    if (status) {
-        printf("Failed to init VL53L7CX\n");
-        return;
-    }
-    printf("Initialized VL53L7CX!\n");
-
-    status = vl53l7cx_set_resolution(&vl53l7cx_dev, VL53L7CX_RESOLUTION_8X8);
-    if (status) {
-        printf("Failed to set resolution\n");
-        return;
-    }
-    printf("Updated resolution\n");
-
-    uint8_t current_resolution;
-    status = vl53l7cx_get_resolution(&vl53l7cx_dev, &current_resolution);
-    if (status) {
-        printf("Failed to get resolution\n");
-        return;
-    }
-    printf("Resolution: %d\n", current_resolution);
-
-    status = vl53l7cx_set_ranging_frequency_hz(&vl53l7cx_dev, 15);
-    if (status) {
-        printf("Failed to set ranging frequency\n");
-        return;
-    }
-
-    status = vl53l7cx_start_ranging(&vl53l7cx_dev);
-    if (status) {
-        printf("Failed to start ranging session\n");
-        return;
-    }
-
-    gpio_set_direction(VL53L7CX_INTERRUPT_GPIO, GPIO_MODE_INPUT);
-
-    printf("\e[2J\e[H");
-    for (;;) {
-
-        if (gpio_get_level(VL53L7CX_INTERRUPT_GPIO) != 0) {
-            vTaskDelay(1 / portTICK_PERIOD_MS);
-            continue;
-        }
-
-        // uint8_t is_ready;
-        // status = vl53l7cx_check_data_ready(&vl53l7cx_dev, &is_ready);
-        // if (status || !is_ready) {
-        //     continue;
-        // }
-
-        // printf("Got results\n");
-
-        VL53L7CX_ResultsData results;
-        vl53l7cx_get_ranging_data(&vl53l7cx_dev, &results);
-
-        // for (int i = 0; i < 64; i += 4) {
-        //     printf(
-        //         "| %03u %03u %03u %03u %03u %03u %03u %03u |\n",
-        //         results.target_status[i * VL53L7CX_NB_TARGET_PER_ZONE],
-        //         results.target_status[(i + 1) * VL53L7CX_NB_TARGET_PER_ZONE],
-        //         results.target_status[(i + 2) * VL53L7CX_NB_TARGET_PER_ZONE],
-        //         results.target_status[(i + 3) * VL53L7CX_NB_TARGET_PER_ZONE],
-        //         results.target_status[(i + 4) * VL53L7CX_NB_TARGET_PER_ZONE],
-        //         results.target_status[(i + 5) * VL53L7CX_NB_TARGET_PER_ZONE],
-        //         results.target_status[(i + 6) * VL53L7CX_NB_TARGET_PER_ZONE],
-        //         results.target_status[(i + 7) *
-        //         VL53L7CX_NB_TARGET_PER_ZONE]);
-        // }
-        // printf("-----------------------\n");
-        // for (int i = 0; i < 64; i += 4) {
-        //     printf("| %04d %04d %04d %04d %04d %04d %04d %04d |\n",
-        //            results.distance_mm[i * VL53L7CX_NB_TARGET_PER_ZONE],
-        //            results.distance_mm[(i + 1) *
-        //            VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i + 2)
-        //            * VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i +
-        //            3) * VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i
-        //            + 4) * VL53L7CX_NB_TARGET_PER_ZONE],
-        //            results.distance_mm[(i + 5) *
-        //            VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i + 6)
-        //            * VL53L7CX_NB_TARGET_PER_ZONE], results.distance_mm[(i +
-        //            7) * VL53L7CX_NB_TARGET_PER_ZONE]);
-        // }
-
-        printf("\e[H");
-        for (int i = 0; i < 64; i += 8) {
-            for (int j = 0; j < 8; j++) {
-                int k = (i + j) * VL53L7CX_NB_TARGET_PER_ZONE;
-                int dist = results.target_status[k] == 5 ||
-                                   results.target_status[k] == 9
-                               ? results.distance_mm[k]
-                               : -1;
-                printf("%04d ", dist);
-            }
-            printf("\n");
-        }
-    }
+    };
+    BNO085_Init(bno085_dev);
 
     // i2c_device_config_t dev_cfg = {
     //     .dev_addr_length = 7,
@@ -235,8 +227,8 @@ void app_main(void) {
     //     }
     // }
 
-    ESP_ERROR_CHECK(i2c_master_bus_rm_device(dev_handle));
-    ESP_ERROR_CHECK(i2c_del_master_bus(bus_handle));
+    // ESP_ERROR_CHECK(i2c_master_bus_rm_device(dev_handle));
+    // ESP_ERROR_CHECK(i2c_del_master_bus(bus_handle));
 
     vTaskSuspend(NULL);
 }

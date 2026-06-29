@@ -1,0 +1,11 @@
+menu "BNO085 Configuration"
+
+	config BNO085_INTERRUPT_GPIO
+	int "BNO085 interrupt GPIO pin"
+	default 3
+
+	config BNO085_REQUEST_TIMEOUT_MS
+	int "I2C request timeout in milliseconds"
+	default 100
+
+endmenu
