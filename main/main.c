@@ -2,11 +2,14 @@
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/i2c_types.h"
+#include "driver/spi_common.h"
+#include "driver/spi_master.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
 #include "hal/i2c_types.h"
+#include "hal/spi_types.h"
 #include "platform.h"
 #include "portmacro.h"
 #include "vl53l7cx_api.h"
@@ -15,11 +18,20 @@
 #define LED_GPIO CONFIG_LED_GPIO
 #define ONBOARD_LED_GPIO CONFIG_ONBOARD_LED_GPIO
 
+// I2C definitions
 #define I2C_MASTER_SDA_GPIO GPIO_NUM_5
 #define I2C_MASTER_SCL_GPIO GPIO_NUM_6
+
+// SPI definitions
+#define SPI_MOSI_GPIO CONFIG_SPI_MOSI_GPIO
+#define SPI_MISO_GPIO CONFIG_SPI_MISO_GPIO
+#define SPI_SCK_GPIO CONFIG_SPI_SCK_GPIO
+
+// IMU sensor definitions
 #define BNO085_HOST_INTN CONFIG_BNO085_INTERRUPT_GPIO
 #define BNO058_ADDRESS 0x4A
 
+// ToF sensor definitions
 #define VL53L7CX_ADDRESS 0x52 >> 1
 #define VL53L7CX_INTERRUPT_GPIO CONFIG_VL53L7CX_INTERRUPT_GPIO
 
@@ -173,59 +185,34 @@ void app_main(void) {
 
     // xTaskCreate(tof_task, "tof", 1024 * 3, NULL, 2, NULL);
 
-    i2c_device_config_t bno085_dev_cfg = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = BNO058_ADDRESS,
-        .scl_speed_hz = 100 * 1000,
+    spi_bus_config_t spi_bus_cfg = {
+        .mosi_io_num = SPI_MOSI_GPIO,
+        .miso_io_num = SPI_MISO_GPIO,
+        .sclk_io_num = SPI_SCK_GPIO,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
     };
-    i2c_master_dev_handle_t bno085_handle;
     ESP_ERROR_CHECK(
-        i2c_master_bus_add_device(bus_handle, &bno085_dev_cfg, &bno085_handle));
-    bno085_config_t bno085_dev = {
-        .address = BNO058_ADDRESS,
-        .dev_handle = bno085_handle,
-
+        spi_bus_initialize(SPI2_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO));
+    spi_device_interface_config_t spi_dev_cfg = {
+        .clock_source = SPI_CLK_SRC_DEFAULT,
+        .clock_speed_hz = 3 * 1000 * 1000,
+        .spics_io_num = BNO085_SPI_CSN_GPIO,
+        .mode = 3,
+        .queue_size = 2,
     };
-    BNO085_Init(bno085_dev);
+    spi_device_handle_t bno085_handle;
+    ESP_ERROR_CHECK(
+        spi_bus_add_device(SPI2_HOST, &spi_dev_cfg, &bno085_handle));
 
-    // i2c_device_config_t dev_cfg = {
-    //     .dev_addr_length = 7,
-    //     .device_address = BNO058_ADDRESS,
-    //     .scl_speed_hz = 100000,
-    // };
-    // i2c_master_dev_handle_t dev_handle;
-    // ESP_ERROR_CHECK(
-    //     i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev_handle));
-    //
-    // ESP_ERROR_CHECK(i2c_master_probe(bus_handle, BNO058_ADDRESS, 5000));
-    //
-    // i2c_master_bus_reset(bus_handle);
-    //
-    // for (;;) {
-    //     while (gpio_get_level(BNO085_HOST_INTN) == 1) {
-    //         ESP_LOGI(taskName, "Waiting for interrupt");
-    //         vTaskDelay(100);
-    //     }
-    //     ESP_LOGI(taskName, "Got interrupt!");
-    //
-    //     // ESP_ERROR_CHECK(i2c_master_probe(bus_handle, BNO058_ADDRESS,
-    //     100));
-    //
-    //     // ESP_LOGI(taskName, "Found device 0x%02X", BNO058_ADDRESS);
-    //
-    //     // TODO: figure out how to communicate with BNO058
-    //     uint8_t buf[100];
-    //     memset(buf, 0, 100);
-    //     i2c_master_receive(dev_handle, buf, 2, -1);
-    //     uint16_t package_length = ((uint16_t)buf[0]) & 0xEF;
-    //
-    //     printf("Package length: %d\n", package_length);
-    //     i2c_master_receive(dev_handle, buf, package_length, -1);
-    //
-    //     for (int i = 0; i < package_length; i++) {
-    //         printf("0x%02x\n", buf[i]);
-    //     }
-    // }
+    bno085_config_t bno085_cfg = {.dev_handle = bno085_handle};
+
+    BNO085_Init(bno085_cfg);
+    BNO085_Reset();
+
+    uint8_t buf[1024];
+    size_t response_length;
+    BNO085_Read(bno085_cfg, buf, 1024, &response_length);
 
     // ESP_ERROR_CHECK(i2c_master_bus_rm_device(dev_handle));
     // ESP_ERROR_CHECK(i2c_del_master_bus(bus_handle));

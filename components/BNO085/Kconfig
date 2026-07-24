@@ -2,7 +2,19 @@ menu "BNO085 Configuration"
 
 	config BNO085_INTERRUPT_GPIO
 	int "BNO085 interrupt GPIO pin"
+	default 2
+
+	config BNO085_WAKE_GPIO
+	int "Wake GPIO pin"
+	default 44
+
+	config BNO085_CSN_GPIO
+	int "SPI CSN GPIO pin"
 	default 3
+
+	config BNO085_RESET_GPIO
+	int "SPI reset GPIO pin"
+	default 43
 
 	config BNO085_REQUEST_TIMEOUT_MS
 	int "I2C request timeout in milliseconds"
