@@ -1,5 +1,17 @@
 menu "BNO085 Configuration"
 
+	config SPI_MOSI_GPIO
+	int "SPI MOSI GPIO pin"
+	default 9
+
+	config SPI_MISO_GPIO
+	int "SPI MISO GPIO pin"
+	default 8
+
+	config SPI_SCK_GPIO
+	int "SPI SCK GPIO pin"
+	default 7
+
 	config BNO085_INTERRUPT_GPIO
 	int "BNO085 interrupt GPIO pin"
 	default 2

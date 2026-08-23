@@ -21,24 +21,20 @@
  * to wait for an answer from VL53L7CX sensor.
  */
 
-static uint8_t _vl53l7cx_poll_for_answer(VL53L7CX_Configuration *p_dev,
-                                         uint8_t size, uint8_t pos,
-                                         uint16_t address, uint8_t mask,
-                                         uint8_t expected_value) {
+static uint8_t _vl53l7cx_poll_for_answer(VL53L7CX_Configuration *p_dev, uint8_t size, uint8_t pos, uint16_t address,
+                                         uint8_t mask, uint8_t expected_value) {
     uint8_t status = VL53L7CX_STATUS_OK;
     uint8_t timeout = 0;
 
     do {
-        status |= VL53L7CX_RdMulti(&(p_dev->platform), address,
-                                   p_dev->temp_buffer, size);
+        status |= VL53L7CX_RdMulti(&(p_dev->platform), address, p_dev->temp_buffer, size);
         status |= VL53L7CX_WaitMs(&(p_dev->platform), 10);
 
         if (timeout >= (uint8_t)200) /* 2s timeout */
         {
             status |= (uint8_t)VL53L7CX_STATUS_TIMEOUT_ERROR;
             break;
-        } else if ((size >= (uint8_t)4) &&
-                   (p_dev->temp_buffer[2] >= (uint8_t)0x7f)) {
+        } else if ((size >= (uint8_t)4) && (p_dev->temp_buffer[2] >= (uint8_t)0x7f)) {
             status |= VL53L7CX_MCU_ERROR;
             break;
         } else {
@@ -81,8 +77,7 @@ static uint8_t _vl53l7cx_poll_for_mcu_boot(VL53L7CX_Configuration *p_dev) {
  * to set the offset data gathered from NVM.
  */
 
-static uint8_t _vl53l7cx_send_offset_data(VL53L7CX_Configuration *p_dev,
-                                          uint8_t resolution) {
+static uint8_t _vl53l7cx_send_offset_data(VL53L7CX_Configuration *p_dev, uint8_t resolution) {
     uint8_t status = VL53L7CX_STATUS_OK;
     uint32_t signal_grid[64];
     int16_t range_grid[64];
@@ -91,39 +86,30 @@ static uint8_t _vl53l7cx_send_offset_data(VL53L7CX_Configuration *p_dev,
     int8_t i, j;
     uint16_t k;
 
-    (void)memcpy(p_dev->temp_buffer, p_dev->offset_data,
-                 VL53L7CX_OFFSET_BUFFER_SIZE);
+    (void)memcpy(p_dev->temp_buffer, p_dev->offset_data, VL53L7CX_OFFSET_BUFFER_SIZE);
 
     /* Data extrapolation is required for 4X4 offset */
     if (resolution == (uint8_t)VL53L7CX_RESOLUTION_4X4) {
         (void)memcpy(&(p_dev->temp_buffer[0x10]), dss_4x4, sizeof(dss_4x4));
         VL53L7CX_SwapBuffer(p_dev->temp_buffer, VL53L7CX_OFFSET_BUFFER_SIZE);
-        (void)memcpy(signal_grid, &(p_dev->temp_buffer[0x3C]),
-                     sizeof(signal_grid));
-        (void)memcpy(range_grid, &(p_dev->temp_buffer[0x140]),
-                     sizeof(range_grid));
+        (void)memcpy(signal_grid, &(p_dev->temp_buffer[0x3C]), sizeof(signal_grid));
+        (void)memcpy(range_grid, &(p_dev->temp_buffer[0x140]), sizeof(range_grid));
 
         for (j = 0; j < (int8_t)4; j++) {
             for (i = 0; i < (int8_t)4; i++) {
                 signal_grid[i + (4 * j)] =
-                    (signal_grid[(2 * i) + (16 * j) + (int8_t)0] +
-                     signal_grid[(2 * i) + (16 * j) + (int8_t)1] +
-                     signal_grid[(2 * i) + (16 * j) + (int8_t)8] +
-                     signal_grid[(2 * i) + (16 * j) + (int8_t)9]) /
+                    (signal_grid[(2 * i) + (16 * j) + (int8_t)0] + signal_grid[(2 * i) + (16 * j) + (int8_t)1] +
+                     signal_grid[(2 * i) + (16 * j) + (int8_t)8] + signal_grid[(2 * i) + (16 * j) + (int8_t)9]) /
                     (uint32_t)4;
-                range_grid[i + (4 * j)] = (range_grid[(2 * i) + (16 * j)] +
-                                           range_grid[(2 * i) + (16 * j) + 1] +
-                                           range_grid[(2 * i) + (16 * j) + 8] +
-                                           range_grid[(2 * i) + (16 * j) + 9]) /
+                range_grid[i + (4 * j)] = (range_grid[(2 * i) + (16 * j)] + range_grid[(2 * i) + (16 * j) + 1] +
+                                           range_grid[(2 * i) + (16 * j) + 8] + range_grid[(2 * i) + (16 * j) + 9]) /
                                           (int16_t)4;
             }
         }
         (void)memset(&range_grid[0x10], 0, (uint16_t)96);
         (void)memset(&signal_grid[0x10], 0, (uint16_t)192);
-        (void)memcpy(&(p_dev->temp_buffer[0x3C]), signal_grid,
-                     sizeof(signal_grid));
-        (void)memcpy(&(p_dev->temp_buffer[0x140]), range_grid,
-                     sizeof(range_grid));
+        (void)memcpy(&(p_dev->temp_buffer[0x3C]), signal_grid, sizeof(signal_grid));
+        (void)memcpy(&(p_dev->temp_buffer[0x140]), range_grid, sizeof(range_grid));
         VL53L7CX_SwapBuffer(p_dev->temp_buffer, VL53L7CX_OFFSET_BUFFER_SIZE);
     }
 
@@ -132,10 +118,8 @@ static uint8_t _vl53l7cx_send_offset_data(VL53L7CX_Configuration *p_dev,
     }
 
     (void)memcpy(&(p_dev->temp_buffer[0x1E0]), footer, 8);
-    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0x2e18, p_dev->temp_buffer,
-                               VL53L7CX_OFFSET_BUFFER_SIZE);
-    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS,
-                                        0xff, 0x03);
+    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0x2e18, p_dev->temp_buffer, VL53L7CX_OFFSET_BUFFER_SIZE);
+    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS, 0xff, 0x03);
 
     return status;
 }
@@ -145,8 +129,7 @@ static uint8_t _vl53l7cx_send_offset_data(VL53L7CX_Configuration *p_dev,
  * to set the Xtalk data from generic configuration, or user's calibration.
  */
 
-static uint8_t _vl53l7cx_send_xtalk_data(VL53L7CX_Configuration *p_dev,
-                                         uint8_t resolution) {
+static uint8_t _vl53l7cx_send_xtalk_data(VL53L7CX_Configuration *p_dev, uint8_t resolution) {
     uint8_t status = VL53L7CX_STATUS_OK;
     uint8_t res4x4[] = {0x0F, 0x04, 0x04, 0x17, 0x08, 0x10, 0x10, 0x07};
     uint8_t dss_4x4[] = {0x00, 0x78, 0x00, 0x08, 0x00, 0x00, 0x00, 0x08};
@@ -154,8 +137,7 @@ static uint8_t _vl53l7cx_send_xtalk_data(VL53L7CX_Configuration *p_dev,
     uint32_t signal_grid[64];
     int8_t i, j;
 
-    (void)memcpy(p_dev->temp_buffer, &(p_dev->xtalk_data[0]),
-                 VL53L7CX_XTALK_BUFFER_SIZE);
+    (void)memcpy(p_dev->temp_buffer, &(p_dev->xtalk_data[0]), VL53L7CX_XTALK_BUFFER_SIZE);
 
     /* Data extrapolation is required for 4X4 Xtalk */
     if (resolution == (uint8_t)VL53L7CX_RESOLUTION_4X4) {
@@ -163,33 +145,24 @@ static uint8_t _vl53l7cx_send_xtalk_data(VL53L7CX_Configuration *p_dev,
         (void)memcpy(&(p_dev->temp_buffer[0x020]), dss_4x4, sizeof(dss_4x4));
 
         VL53L7CX_SwapBuffer(p_dev->temp_buffer, VL53L7CX_XTALK_BUFFER_SIZE);
-        (void)memcpy(signal_grid, &(p_dev->temp_buffer[0x34]),
-                     sizeof(signal_grid));
+        (void)memcpy(signal_grid, &(p_dev->temp_buffer[0x34]), sizeof(signal_grid));
 
         for (j = 0; j < (int8_t)4; j++) {
             for (i = 0; i < (int8_t)4; i++) {
-                signal_grid[i + (4 * j)] =
-                    (signal_grid[(2 * i) + (16 * j) + 0] +
-                     signal_grid[(2 * i) + (16 * j) + 1] +
-                     signal_grid[(2 * i) + (16 * j) + 8] +
-                     signal_grid[(2 * i) + (16 * j) + 9]) /
-                    (uint32_t)4;
+                signal_grid[i + (4 * j)] = (signal_grid[(2 * i) + (16 * j) + 0] + signal_grid[(2 * i) + (16 * j) + 1] +
+                                            signal_grid[(2 * i) + (16 * j) + 8] + signal_grid[(2 * i) + (16 * j) + 9]) /
+                                           (uint32_t)4;
             }
         }
         (void)memset(&signal_grid[0x10], 0, (uint32_t)192);
-        (void)memcpy(&(p_dev->temp_buffer[0x34]), signal_grid,
-                     sizeof(signal_grid));
+        (void)memcpy(&(p_dev->temp_buffer[0x34]), signal_grid, sizeof(signal_grid));
         VL53L7CX_SwapBuffer(p_dev->temp_buffer, VL53L7CX_XTALK_BUFFER_SIZE);
-        (void)memcpy(&(p_dev->temp_buffer[0x134]), profile_4x4,
-                     sizeof(profile_4x4));
-        (void)memset(&(p_dev->temp_buffer[0x078]), 0,
-                     (uint32_t)4 * sizeof(uint8_t));
+        (void)memcpy(&(p_dev->temp_buffer[0x134]), profile_4x4, sizeof(profile_4x4));
+        (void)memset(&(p_dev->temp_buffer[0x078]), 0, (uint32_t)4 * sizeof(uint8_t));
     }
 
-    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0x2cf8, p_dev->temp_buffer,
-                               VL53L7CX_XTALK_BUFFER_SIZE);
-    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS,
-                                        0xff, 0x03);
+    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0x2cf8, p_dev->temp_buffer, VL53L7CX_XTALK_BUFFER_SIZE);
+    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS, 0xff, 0x03);
 
     return status;
 }
@@ -291,14 +264,11 @@ uint8_t vl53l7cx_init(VL53L7CX_Configuration *p_dev) {
 
     /* Download FW into VL53L7CX */
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x09);
-    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0,
-                               (uint8_t *)&VL53L7CX_FIRMWARE[0], 0x8000);
+    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0, (uint8_t *)&VL53L7CX_FIRMWARE[0], 0x8000);
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x0a);
-    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0,
-                               (uint8_t *)&VL53L7CX_FIRMWARE[0x8000], 0x8000);
+    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0, (uint8_t *)&VL53L7CX_FIRMWARE[0x8000], 0x8000);
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x0b);
-    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0,
-                               (uint8_t *)&VL53L7CX_FIRMWARE[0x10000], 0x5000);
+    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0, (uint8_t *)&VL53L7CX_FIRMWARE[0x10000], 0x5000);
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x01);
 
     /* Check if FW correctly downloaded */
@@ -332,65 +302,49 @@ uint8_t vl53l7cx_init(VL53L7CX_Configuration *p_dev) {
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x02);
 
     /* Get offset NVM data and store them into the offset buffer */
-    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0x2fd8,
-                               (uint8_t *)VL53L7CX_GET_NVM_CMD,
-                               sizeof(VL53L7CX_GET_NVM_CMD));
     status |=
-        _vl53l7cx_poll_for_answer(p_dev, 4, 0, VL53L7CX_UI_CMD_STATUS, 0xff, 2);
-    status |= VL53L7CX_RdMulti(&(p_dev->platform), VL53L7CX_UI_CMD_START,
-                               p_dev->temp_buffer, VL53L7CX_NVM_DATA_SIZE);
-    (void)memcpy(p_dev->offset_data, p_dev->temp_buffer,
-                 VL53L7CX_OFFSET_BUFFER_SIZE);
+        VL53L7CX_WrMulti(&(p_dev->platform), 0x2fd8, (uint8_t *)VL53L7CX_GET_NVM_CMD, sizeof(VL53L7CX_GET_NVM_CMD));
+    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 0, VL53L7CX_UI_CMD_STATUS, 0xff, 2);
+    status |= VL53L7CX_RdMulti(&(p_dev->platform), VL53L7CX_UI_CMD_START, p_dev->temp_buffer, VL53L7CX_NVM_DATA_SIZE);
+    (void)memcpy(p_dev->offset_data, p_dev->temp_buffer, VL53L7CX_OFFSET_BUFFER_SIZE);
     status |= _vl53l7cx_send_offset_data(p_dev, VL53L7CX_RESOLUTION_4X4);
 
     /* Set default Xtalk shape. Send Xtalk to sensor */
-    (void)memcpy(p_dev->xtalk_data, (uint8_t *)VL53L7CX_DEFAULT_XTALK,
-                 VL53L7CX_XTALK_BUFFER_SIZE);
+    (void)memcpy(p_dev->xtalk_data, (uint8_t *)VL53L7CX_DEFAULT_XTALK, VL53L7CX_XTALK_BUFFER_SIZE);
     status |= _vl53l7cx_send_xtalk_data(p_dev, VL53L7CX_RESOLUTION_4X4);
 
     /* Send default configuration to VL53L7CX firmware */
-    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0x2c34,
-                               p_dev->default_configuration,
+    status |= VL53L7CX_WrMulti(&(p_dev->platform), 0x2c34, p_dev->default_configuration,
                                sizeof(VL53L7CX_DEFAULT_CONFIGURATION));
-    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS,
-                                        0xff, 0x03);
+    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS, 0xff, 0x03);
 
-    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&pipe_ctrl,
-                                      VL53L7CX_DCI_PIPE_CONTROL,
-                                      (uint16_t)sizeof(pipe_ctrl));
+    status |=
+        vl53l7cx_dci_write_data(p_dev, (uint8_t *)&pipe_ctrl, VL53L7CX_DCI_PIPE_CONTROL, (uint16_t)sizeof(pipe_ctrl));
 #if VL53L7CX_NB_TARGET_PER_ZONE != 1
     tmp = VL53L7CX_NB_TARGET_PER_ZONE;
-    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                        VL53L7CX_DCI_FW_NB_TARGET, 16,
-                                        (uint8_t *)&tmp, 1, 0x0C);
+    status |=
+        vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_FW_NB_TARGET, 16, (uint8_t *)&tmp, 1, 0x0C);
 #endif
 
-    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&single_range,
-                                      VL53L7CX_DCI_SINGLE_RANGE,
+    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&single_range, VL53L7CX_DCI_SINGLE_RANGE,
                                       (uint16_t)sizeof(single_range));
 
     tmp = (uint8_t)1;
-    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                        VL53L7CX_GLARE_FILTER, 40,
-                                        (uint8_t *)&tmp, 1, 0x26);
-    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                        VL53L7CX_GLARE_FILTER, 40,
-                                        (uint8_t *)&tmp, 1, 0x25);
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_GLARE_FILTER, 40, (uint8_t *)&tmp, 1, 0x26);
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_GLARE_FILTER, 40, (uint8_t *)&tmp, 1, 0x25);
 exit:
     return status;
 }
 
-uint8_t vl53l7cx_set_i2c_address(VL53L7CX_Configuration *p_dev,
-                                 uint16_t i2c_address) {
+uint8_t vl53l7cx_set_i2c_address(VL53L7CX_Configuration *p_dev, uint16_t i2c_address) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x00);
-    status |=
-        VL53L7CX_WrByte(&(p_dev->platform), 0x4, (uint8_t)(i2c_address >> 1));
+    status |= VL53L7CX_WrByte(&(p_dev->platform), 0x4, (uint8_t)(i2c_address >> 1));
 
     p_dev->platform.address = i2c_address;
-    esp_err_t err = i2c_master_device_change_address(
-        p_dev->platform.dev_handle, i2c_address, VL53L7CX_REQUEST_TIMEOUT_MS);
+    esp_err_t err =
+        i2c_master_device_change_address(p_dev->platform.dev_handle, i2c_address, VL53L7CX_REQUEST_TIMEOUT_MS);
 
     if (err != ESP_OK) {
         status |= 1;
@@ -401,8 +355,7 @@ uint8_t vl53l7cx_set_i2c_address(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_get_power_mode(VL53L7CX_Configuration *p_dev,
-                                uint8_t *p_power_mode) {
+uint8_t vl53l7cx_get_power_mode(VL53L7CX_Configuration *p_dev, uint8_t *p_power_mode) {
     uint8_t tmp, status = VL53L7CX_STATUS_OK;
 
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7FFF, 0x00);
@@ -427,8 +380,7 @@ uint8_t vl53l7cx_get_power_mode(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_set_power_mode(VL53L7CX_Configuration *p_dev,
-                                uint8_t power_mode) {
+uint8_t vl53l7cx_set_power_mode(VL53L7CX_Configuration *p_dev, uint8_t power_mode) {
     uint8_t current_power_mode, status = VL53L7CX_STATUS_OK;
 
     status |= vl53l7cx_get_power_mode(p_dev, &current_power_mode);
@@ -470,17 +422,13 @@ uint8_t vl53l7cx_start_ranging(VL53L7CX_Configuration *p_dev) {
     p_dev->streamcount = 255;
 
     /* Enable mandatory output (meta and common data) */
-    uint32_t output_bh_enable[] = {0x00000007U, 0x00000000U, 0x00000000U,
-                                   0xC0000000U};
+    uint32_t output_bh_enable[] = {0x00000007U, 0x00000000U, 0x00000000U, 0xC0000000U};
 
     /* Send addresses of possible output */
-    uint32_t output[] = {
-        VL53L7CX_START_BH,         VL53L7CX_METADATA_BH,
-        VL53L7CX_COMMONDATA_BH,    VL53L7CX_AMBIENT_RATE_BH,
-        VL53L7CX_SPAD_COUNT_BH,    VL53L7CX_NB_TARGET_DETECTED_BH,
-        VL53L7CX_SIGNAL_RATE_BH,   VL53L7CX_RANGE_SIGMA_MM_BH,
-        VL53L7CX_DISTANCE_BH,      VL53L7CX_REFLECTANCE_BH,
-        VL53L7CX_TARGET_STATUS_BH, VL53L7CX_MOTION_DETECT_BH};
+    uint32_t output[] = {VL53L7CX_START_BH,        VL53L7CX_METADATA_BH,       VL53L7CX_COMMONDATA_BH,
+                         VL53L7CX_AMBIENT_RATE_BH, VL53L7CX_SPAD_COUNT_BH,     VL53L7CX_NB_TARGET_DETECTED_BH,
+                         VL53L7CX_SIGNAL_RATE_BH,  VL53L7CX_RANGE_SIGMA_MM_BH, VL53L7CX_DISTANCE_BH,
+                         VL53L7CX_REFLECTANCE_BH,  VL53L7CX_TARGET_STATUS_BH,  VL53L7CX_MOTION_DETECT_BH};
 
     /* Enable selected outputs in the 'platform.h' file */
 #ifndef VL53L7CX_DISABLE_AMBIENT_PER_SPAD
@@ -514,21 +462,16 @@ uint8_t vl53l7cx_start_ranging(VL53L7CX_Configuration *p_dev) {
     /* Update data size */
     for (i = 0; i < (uint32_t)(sizeof(output) / sizeof(uint32_t)); i++) {
         if ((output[i] == (uint8_t)0) ||
-            ((output_bh_enable[i / (uint32_t)32] &
-              ((uint32_t)1 << (i % (uint32_t)32))) == (uint32_t)0)) {
+            ((output_bh_enable[i / (uint32_t)32] & ((uint32_t)1 << (i % (uint32_t)32))) == (uint32_t)0)) {
             continue;
         }
 
         bh_ptr = (union Block_header *)&(output[i]);
-        if (((uint8_t)bh_ptr->type >= (uint8_t)0x1) &&
-            ((uint8_t)bh_ptr->type < (uint8_t)0x0d)) {
-            if ((bh_ptr->idx >= (uint16_t)0x54d0) &&
-                (bh_ptr->idx < (uint16_t)(0x54d0 + 960))) {
+        if (((uint8_t)bh_ptr->type >= (uint8_t)0x1) && ((uint8_t)bh_ptr->type < (uint8_t)0x0d)) {
+            if ((bh_ptr->idx >= (uint16_t)0x54d0) && (bh_ptr->idx < (uint16_t)(0x54d0 + 960))) {
                 bh_ptr->size = resolution;
             } else {
-                bh_ptr->size =
-                    (uint16_t)((uint16_t)resolution *
-                               (uint16_t)VL53L7CX_NB_TARGET_PER_ZONE);
+                bh_ptr->size = (uint16_t)((uint16_t)resolution * (uint16_t)VL53L7CX_NB_TARGET_PER_ZONE);
             }
             p_dev->data_read_size += bh_ptr->type * bh_ptr->size;
         } else {
@@ -538,19 +481,15 @@ uint8_t vl53l7cx_start_ranging(VL53L7CX_Configuration *p_dev) {
     }
     p_dev->data_read_size += (uint32_t)24;
 
-    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&(output),
-                                      VL53L7CX_DCI_OUTPUT_LIST,
-                                      (uint16_t)sizeof(output));
+    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&(output), VL53L7CX_DCI_OUTPUT_LIST, (uint16_t)sizeof(output));
 
     header_config[0] = p_dev->data_read_size;
     header_config[1] = i + (uint32_t)1;
 
-    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&(header_config),
-                                      VL53L7CX_DCI_OUTPUT_CONFIG,
+    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&(header_config), VL53L7CX_DCI_OUTPUT_CONFIG,
                                       (uint16_t)sizeof(header_config));
 
-    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&(output_bh_enable),
-                                      VL53L7CX_DCI_OUTPUT_ENABLES,
+    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&(output_bh_enable), VL53L7CX_DCI_OUTPUT_ENABLES,
                                       (uint16_t)sizeof(output_bh_enable));
 
     /* Start xshut bypass (interrupt mode) */
@@ -559,15 +498,12 @@ uint8_t vl53l7cx_start_ranging(VL53L7CX_Configuration *p_dev) {
     status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x02);
 
     /* Start ranging session */
-    status |= VL53L7CX_WrMulti(&(p_dev->platform),
-                               VL53L7CX_UI_CMD_END - (uint16_t)(4 - 1),
-                               (uint8_t *)cmd, sizeof(cmd));
-    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS,
-                                        0xff, 0x03);
+    status |=
+        VL53L7CX_WrMulti(&(p_dev->platform), VL53L7CX_UI_CMD_END - (uint16_t)(4 - 1), (uint8_t *)cmd, sizeof(cmd));
+    status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS, 0xff, 0x03);
 
     /* Read ui range data content and compare if data size is the correct one */
-    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer,
-                                     0x5440, 12);
+    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer, 0x5440, 12);
     (void)memcpy(&tmp, &(p_dev->temp_buffer[0x8]), sizeof(tmp));
     if (tmp != p_dev->data_read_size) {
         status |= VL53L7CX_STATUS_ERROR;
@@ -581,10 +517,8 @@ uint8_t vl53l7cx_stop_ranging(VL53L7CX_Configuration *p_dev) {
     uint16_t timeout = 0;
     uint32_t auto_stop_flag = 0;
 
-    status |= VL53L7CX_RdMulti(&(p_dev->platform), 0x2FFC,
-                               (uint8_t *)&auto_stop_flag, 4);
-    if ((auto_stop_flag != (uint32_t)0x4FF) &&
-        (p_dev->is_auto_stop_enabled == (uint8_t)0)) {
+    status |= VL53L7CX_RdMulti(&(p_dev->platform), 0x2FFC, (uint8_t *)&auto_stop_flag, 4);
+    if ((auto_stop_flag != (uint32_t)0x4FF) && (p_dev->is_auto_stop_enabled == (uint8_t)0)) {
         status |= VL53L7CX_WrByte(&(p_dev->platform), 0x7fff, 0x00);
 
         /* Provoke MCU stop */
@@ -625,16 +559,13 @@ uint8_t vl53l7cx_stop_ranging(VL53L7CX_Configuration *p_dev) {
     return status;
 }
 
-uint8_t vl53l7cx_check_data_ready(VL53L7CX_Configuration *p_dev,
-                                  uint8_t *p_isReady) {
+uint8_t vl53l7cx_check_data_ready(VL53L7CX_Configuration *p_dev, uint8_t *p_isReady) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
     status |= VL53L7CX_RdMulti(&(p_dev->platform), 0x0, p_dev->temp_buffer, 4);
 
-    if ((p_dev->temp_buffer[0] != p_dev->streamcount) &&
-        (p_dev->temp_buffer[0] != (uint8_t)255) &&
-        (p_dev->temp_buffer[1] == (uint8_t)0x5) &&
-        ((p_dev->temp_buffer[2] & (uint8_t)0x5) == (uint8_t)0x5) &&
+    if ((p_dev->temp_buffer[0] != p_dev->streamcount) && (p_dev->temp_buffer[0] != (uint8_t)255) &&
+        (p_dev->temp_buffer[1] == (uint8_t)0x5) && ((p_dev->temp_buffer[2] & (uint8_t)0x5) == (uint8_t)0x5) &&
         ((p_dev->temp_buffer[3] & (uint8_t)0x10) == (uint8_t)0x10)) {
         *p_isReady = (uint8_t)1;
         p_dev->streamcount = p_dev->temp_buffer[0];
@@ -649,20 +580,17 @@ uint8_t vl53l7cx_check_data_ready(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_get_ranging_data(VL53L7CX_Configuration *p_dev,
-                                  VL53L7CX_ResultsData *p_results) {
+uint8_t vl53l7cx_get_ranging_data(VL53L7CX_Configuration *p_dev, VL53L7CX_ResultsData *p_results) {
     uint8_t status = VL53L7CX_STATUS_OK;
     uint16_t header_id, footer_id;
     union Block_header *bh_ptr;
     uint32_t i, j, msize;
-    status |= VL53L7CX_RdMulti(&(p_dev->platform), 0x0, p_dev->temp_buffer,
-                               p_dev->data_read_size);
+    status |= VL53L7CX_RdMulti(&(p_dev->platform), 0x0, p_dev->temp_buffer, p_dev->data_read_size);
     p_dev->streamcount = p_dev->temp_buffer[0];
     VL53L7CX_SwapBuffer(p_dev->temp_buffer, (uint16_t)p_dev->data_read_size);
 
     /* Start conversion at position 16 to avoid headers */
-    for (i = (uint32_t)16; i < (uint32_t)p_dev->data_read_size;
-         i += (uint32_t)4) {
+    for (i = (uint32_t)16; i < (uint32_t)p_dev->data_read_size; i += (uint32_t)4) {
         bh_ptr = (union Block_header *)&(p_dev->temp_buffer[i]);
         if ((bh_ptr->type > (uint32_t)0x1) && (bh_ptr->type < (uint32_t)0xd)) {
             msize = bh_ptr->type * bh_ptr->size;
@@ -672,62 +600,52 @@ uint8_t vl53l7cx_get_ranging_data(VL53L7CX_Configuration *p_dev,
 
         switch (bh_ptr->idx) {
         case VL53L7CX_METADATA_IDX:
-            p_results->silicon_temp_degc =
-                (int8_t)p_dev->temp_buffer[i + (uint32_t)12];
+            p_results->silicon_temp_degc = (int8_t)p_dev->temp_buffer[i + (uint32_t)12];
             break;
 
 #ifndef VL53L7CX_DISABLE_AMBIENT_PER_SPAD
         case VL53L7CX_AMBIENT_RATE_IDX:
-            (void)memcpy(p_results->ambient_per_spad,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->ambient_per_spad, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_NB_SPADS_ENABLED
         case VL53L7CX_SPAD_COUNT_IDX:
-            (void)memcpy(p_results->nb_spads_enabled,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->nb_spads_enabled, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_NB_TARGET_DETECTED
         case VL53L7CX_NB_TARGET_DETECTED_IDX:
-            (void)memcpy(p_results->nb_target_detected,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->nb_target_detected, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_SIGNAL_PER_SPAD
         case VL53L7CX_SIGNAL_RATE_IDX:
-            (void)memcpy(p_results->signal_per_spad,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->signal_per_spad, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_RANGE_SIGMA_MM
         case VL53L7CX_RANGE_SIGMA_MM_IDX:
-            (void)memcpy(p_results->range_sigma_mm,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->range_sigma_mm, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_DISTANCE_MM
         case VL53L7CX_DISTANCE_IDX:
-            (void)memcpy(p_results->distance_mm,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->distance_mm, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_REFLECTANCE_PERCENT
         case VL53L7CX_REFLECTANCE_EST_PC_IDX:
-            (void)memcpy(p_results->reflectance,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->reflectance, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_TARGET_STATUS
         case VL53L7CX_TARGET_STATUS_IDX:
-            (void)memcpy(p_results->target_status,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(p_results->target_status, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
 #ifndef VL53L7CX_DISABLE_MOTION_INDICATOR
         case VL53L7CX_MOTION_DETEC_IDX:
-            (void)memcpy(&p_results->motion_indicator,
-                         &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
+            (void)memcpy(&p_results->motion_indicator, &(p_dev->temp_buffer[i + (uint32_t)4]), msize);
             break;
 #endif
         default:
@@ -745,9 +663,7 @@ uint8_t vl53l7cx_get_ranging_data(VL53L7CX_Configuration *p_dev,
     }
 #endif
 
-    for (i = 0;
-         i < (uint32_t)(VL53L7CX_RESOLUTION_8X8 * VL53L7CX_NB_TARGET_PER_ZONE);
-         i++) {
+    for (i = 0; i < (uint32_t)(VL53L7CX_RESOLUTION_8X8 * VL53L7CX_NB_TARGET_PER_ZONE); i++) {
 #ifndef VL53L7CX_DISABLE_DISTANCE_MM
         p_results->distance_mm[i] /= 4;
         if (p_results->distance_mm[i] < 0) {
@@ -771,10 +687,7 @@ uint8_t vl53l7cx_get_ranging_data(VL53L7CX_Configuration *p_dev,
         if (p_results->nb_target_detected[i] == (uint8_t)0) {
             for (j = 0; j < (uint32_t)VL53L7CX_NB_TARGET_PER_ZONE; j++) {
 #ifndef VL53L7CX_DISABLE_TARGET_STATUS
-                p_results
-                    ->target_status[((uint32_t)VL53L7CX_NB_TARGET_PER_ZONE *
-                                     (uint32_t)i) +
-                                    j] = (uint8_t)255;
+                p_results->target_status[((uint32_t)VL53L7CX_NB_TARGET_PER_ZONE * (uint32_t)i) + j] = (uint8_t)255;
 #endif
             }
         }
@@ -794,13 +707,8 @@ uint8_t vl53l7cx_get_ranging_data(VL53L7CX_Configuration *p_dev,
     header_id = ((uint16_t)(p_dev->temp_buffer[0x8]) << 8) & 0xFF00U;
     header_id |= ((uint16_t)(p_dev->temp_buffer[0x9])) & 0x00FFU;
 
-    footer_id =
-        ((uint16_t)(p_dev->temp_buffer[p_dev->data_read_size - (uint32_t)4])
-         << 8) &
-        0xFF00U;
-    footer_id |=
-        ((uint16_t)(p_dev->temp_buffer[p_dev->data_read_size - (uint32_t)3])) &
-        0xFFU;
+    footer_id = ((uint16_t)(p_dev->temp_buffer[p_dev->data_read_size - (uint32_t)4]) << 8) & 0xFF00U;
+    footer_id |= ((uint16_t)(p_dev->temp_buffer[p_dev->data_read_size - (uint32_t)3])) & 0xFFU;
     if (header_id != footer_id) {
         status |= VL53L7CX_STATUS_CORRUPTED_FRAME;
     }
@@ -808,58 +716,47 @@ uint8_t vl53l7cx_get_ranging_data(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_get_resolution(VL53L7CX_Configuration *p_dev,
-                                uint8_t *p_resolution) {
+uint8_t vl53l7cx_get_resolution(VL53L7CX_Configuration *p_dev, uint8_t *p_resolution) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
-    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                     VL53L7CX_DCI_ZONE_CONFIG, 8);
+    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_ZONE_CONFIG, 8);
     *p_resolution = p_dev->temp_buffer[0x00] * p_dev->temp_buffer[0x01];
 
     return status;
 }
 
-uint8_t vl53l7cx_set_resolution(VL53L7CX_Configuration *p_dev,
-                                uint8_t resolution) {
+uint8_t vl53l7cx_set_resolution(VL53L7CX_Configuration *p_dev, uint8_t resolution) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
     switch (resolution) {
     case VL53L7CX_RESOLUTION_4X4:
-        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                         VL53L7CX_DCI_DSS_CONFIG, 16);
+        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_DSS_CONFIG, 16);
         p_dev->temp_buffer[0x04] = 64;
         p_dev->temp_buffer[0x06] = 64;
         p_dev->temp_buffer[0x09] = 4;
-        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer,
-                                          VL53L7CX_DCI_DSS_CONFIG, 16);
+        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_DSS_CONFIG, 16);
 
-        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                         VL53L7CX_DCI_ZONE_CONFIG, 8);
+        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_ZONE_CONFIG, 8);
         p_dev->temp_buffer[0x00] = 4;
         p_dev->temp_buffer[0x01] = 4;
         p_dev->temp_buffer[0x04] = 8;
         p_dev->temp_buffer[0x05] = 8;
-        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer,
-                                          VL53L7CX_DCI_ZONE_CONFIG, 8);
+        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_ZONE_CONFIG, 8);
         break;
 
     case VL53L7CX_RESOLUTION_8X8:
-        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                         VL53L7CX_DCI_DSS_CONFIG, 16);
+        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_DSS_CONFIG, 16);
         p_dev->temp_buffer[0x04] = 16;
         p_dev->temp_buffer[0x06] = 16;
         p_dev->temp_buffer[0x09] = 1;
-        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer,
-                                          VL53L7CX_DCI_DSS_CONFIG, 16);
+        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_DSS_CONFIG, 16);
 
-        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                         VL53L7CX_DCI_ZONE_CONFIG, 8);
+        status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_ZONE_CONFIG, 8);
         p_dev->temp_buffer[0x00] = 8;
         p_dev->temp_buffer[0x01] = 8;
         p_dev->temp_buffer[0x04] = 4;
         p_dev->temp_buffer[0x05] = 4;
-        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer,
-                                          VL53L7CX_DCI_ZONE_CONFIG, 8);
+        status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_ZONE_CONFIG, 8);
 
         break;
 
@@ -874,34 +771,28 @@ uint8_t vl53l7cx_set_resolution(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_get_ranging_frequency_hz(VL53L7CX_Configuration *p_dev,
-                                          uint8_t *p_frequency_hz) {
+uint8_t vl53l7cx_get_ranging_frequency_hz(VL53L7CX_Configuration *p_dev, uint8_t *p_frequency_hz) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
-    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer,
-                                     VL53L7CX_DCI_FREQ_HZ, 4);
+    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer, VL53L7CX_DCI_FREQ_HZ, 4);
     *p_frequency_hz = p_dev->temp_buffer[0x01];
 
     return status;
 }
 
-uint8_t vl53l7cx_set_ranging_frequency_hz(VL53L7CX_Configuration *p_dev,
-                                          uint8_t frequency_hz) {
+uint8_t vl53l7cx_set_ranging_frequency_hz(VL53L7CX_Configuration *p_dev, uint8_t frequency_hz) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
-    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                        VL53L7CX_DCI_FREQ_HZ, 4,
-                                        (uint8_t *)&frequency_hz, 1, 0x01);
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_FREQ_HZ, 4, (uint8_t *)&frequency_hz, 1,
+                                        0x01);
 
     return status;
 }
 
-uint8_t vl53l7cx_get_integration_time_ms(VL53L7CX_Configuration *p_dev,
-                                         uint32_t *p_time_ms) {
+uint8_t vl53l7cx_get_integration_time_ms(VL53L7CX_Configuration *p_dev, uint32_t *p_time_ms) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
-    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer,
-                                     VL53L7CX_DCI_INT_TIME, 20);
+    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer, VL53L7CX_DCI_INT_TIME, 20);
 
     (void)memcpy(p_time_ms, &(p_dev->temp_buffer[0x0]), 4);
     *p_time_ms /= (uint32_t)1000;
@@ -909,8 +800,7 @@ uint8_t vl53l7cx_get_integration_time_ms(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_set_integration_time_ms(VL53L7CX_Configuration *p_dev,
-                                         uint32_t integration_time_ms) {
+uint8_t vl53l7cx_set_integration_time_ms(VL53L7CX_Configuration *p_dev, uint32_t integration_time_ms) {
     uint8_t status = VL53L7CX_STATUS_OK;
     uint32_t integration = integration_time_ms;
 
@@ -920,29 +810,24 @@ uint8_t vl53l7cx_set_integration_time_ms(VL53L7CX_Configuration *p_dev,
     } else {
         integration *= (uint32_t)1000;
 
-        status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                            VL53L7CX_DCI_INT_TIME, 20,
+        status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_INT_TIME, 20,
                                             (uint8_t *)&integration, 4, 0x00);
     }
 
     return status;
 }
 
-uint8_t vl53l7cx_get_sharpener_percent(VL53L7CX_Configuration *p_dev,
-                                       uint8_t *p_sharpener_percent) {
+uint8_t vl53l7cx_get_sharpener_percent(VL53L7CX_Configuration *p_dev, uint8_t *p_sharpener_percent) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
-    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                     VL53L7CX_DCI_SHARPENER, 16);
+    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_SHARPENER, 16);
 
-    *p_sharpener_percent =
-        (p_dev->temp_buffer[0xD] * (uint8_t)100) / (uint8_t)255;
+    *p_sharpener_percent = (p_dev->temp_buffer[0xD] * (uint8_t)100) / (uint8_t)255;
 
     return status;
 }
 
-uint8_t vl53l7cx_set_sharpener_percent(VL53L7CX_Configuration *p_dev,
-                                       uint8_t sharpener_percent) {
+uint8_t vl53l7cx_set_sharpener_percent(VL53L7CX_Configuration *p_dev, uint8_t sharpener_percent) {
     uint8_t status = VL53L7CX_STATUS_OK;
     uint8_t sharpener;
 
@@ -950,33 +835,28 @@ uint8_t vl53l7cx_set_sharpener_percent(VL53L7CX_Configuration *p_dev,
         status |= VL53L7CX_STATUS_INVALID_PARAM;
     } else {
         sharpener = (sharpener_percent * (uint8_t)255) / (uint8_t)100;
-        status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                            VL53L7CX_DCI_SHARPENER, 16,
+        status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_SHARPENER, 16,
                                             (uint8_t *)&sharpener, 1, 0xD);
     }
 
     return status;
 }
 
-uint8_t vl53l7cx_get_target_order(VL53L7CX_Configuration *p_dev,
-                                  uint8_t *p_target_order) {
+uint8_t vl53l7cx_get_target_order(VL53L7CX_Configuration *p_dev, uint8_t *p_target_order) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
-    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer,
-                                     VL53L7CX_DCI_TARGET_ORDER, 4);
+    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer, VL53L7CX_DCI_TARGET_ORDER, 4);
     *p_target_order = (uint8_t)p_dev->temp_buffer[0x0];
 
     return status;
 }
 
-uint8_t vl53l7cx_set_target_order(VL53L7CX_Configuration *p_dev,
-                                  uint8_t target_order) {
+uint8_t vl53l7cx_set_target_order(VL53L7CX_Configuration *p_dev, uint8_t target_order) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
     if ((target_order == (uint8_t)VL53L7CX_TARGET_ORDER_CLOSEST) ||
         (target_order == (uint8_t)VL53L7CX_TARGET_ORDER_STRONGEST)) {
-        status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                            VL53L7CX_DCI_TARGET_ORDER, 4,
+        status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_TARGET_ORDER, 4,
                                             (uint8_t *)&target_order, 1, 0x0);
     } else {
         status |= VL53L7CX_STATUS_INVALID_PARAM;
@@ -985,12 +865,10 @@ uint8_t vl53l7cx_set_target_order(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_get_ranging_mode(VL53L7CX_Configuration *p_dev,
-                                  uint8_t *p_ranging_mode) {
+uint8_t vl53l7cx_get_ranging_mode(VL53L7CX_Configuration *p_dev, uint8_t *p_ranging_mode) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
-    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                     VL53L7CX_DCI_RANGING_MODE, 8);
+    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_RANGING_MODE, 8);
 
     if (p_dev->temp_buffer[0x01] == (uint8_t)0x1) {
         *p_ranging_mode = VL53L7CX_RANGING_MODE_CONTINUOUS;
@@ -1001,13 +879,11 @@ uint8_t vl53l7cx_get_ranging_mode(VL53L7CX_Configuration *p_dev,
     return status;
 }
 
-uint8_t vl53l7cx_set_ranging_mode(VL53L7CX_Configuration *p_dev,
-                                  uint8_t ranging_mode) {
+uint8_t vl53l7cx_set_ranging_mode(VL53L7CX_Configuration *p_dev, uint8_t ranging_mode) {
     uint8_t status = VL53L7CX_STATUS_OK;
     uint32_t single_range = 0x00;
 
-    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer,
-                                     VL53L7CX_DCI_RANGING_MODE, 8);
+    status |= vl53l7cx_dci_read_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_RANGING_MODE, 8);
 
     switch (ranging_mode) {
     case VL53L7CX_RANGING_MODE_CONTINUOUS:
@@ -1027,11 +903,9 @@ uint8_t vl53l7cx_set_ranging_mode(VL53L7CX_Configuration *p_dev,
         break;
     }
 
-    status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer,
-                                      VL53L7CX_DCI_RANGING_MODE, (uint16_t)8);
+    status |= vl53l7cx_dci_write_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_RANGING_MODE, (uint16_t)8);
 
-    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&single_range,
-                                      VL53L7CX_DCI_SINGLE_RANGE,
+    status |= vl53l7cx_dci_write_data(p_dev, (uint8_t *)&single_range, VL53L7CX_DCI_SINGLE_RANGE,
                                       (uint16_t)sizeof(single_range));
 
     return status;
@@ -1042,13 +916,11 @@ uint8_t vl53l7cx_enable_internal_cp(VL53L7CX_Configuration *p_dev) {
     uint8_t vcsel_bootup_fsm = 1;
     uint8_t analog_dynamic_pad_0 = 0;
 
-    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                        VL53L7CX_DCI_INTERNAL_CP, 16,
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_INTERNAL_CP, 16,
                                         (uint8_t *)&vcsel_bootup_fsm, 1, 0x0A);
 
-    status |= vl53l7cx_dci_replace_data(
-        p_dev, p_dev->temp_buffer, VL53L7CX_DCI_INTERNAL_CP, 16,
-        (uint8_t *)&analog_dynamic_pad_0, 1, 0x0E);
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_INTERNAL_CP, 16,
+                                        (uint8_t *)&analog_dynamic_pad_0, 1, 0x0E);
 
     return status;
 }
@@ -1058,47 +930,37 @@ uint8_t vl53l7cx_disable_internal_cp(VL53L7CX_Configuration *p_dev) {
     uint8_t vcsel_bootup_fsm = 0;
     uint8_t analog_dynamic_pad_0 = 1;
 
-    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                        VL53L7CX_DCI_INTERNAL_CP, 16,
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_INTERNAL_CP, 16,
                                         (uint8_t *)&vcsel_bootup_fsm, 1, 0x0A);
 
-    status |= vl53l7cx_dci_replace_data(
-        p_dev, p_dev->temp_buffer, VL53L7CX_DCI_INTERNAL_CP, 16,
-        (uint8_t *)&analog_dynamic_pad_0, 1, 0x0E);
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_INTERNAL_CP, 16,
+                                        (uint8_t *)&analog_dynamic_pad_0, 1, 0x0E);
 
     return status;
 }
 
-uint8_t vl53l7cx_get_VHV_repeat_count(VL53L7CX_Configuration *p_dev,
-                                      uint32_t *p_repeat_count) {
+uint8_t vl53l7cx_get_VHV_repeat_count(VL53L7CX_Configuration *p_dev, uint32_t *p_repeat_count) {
     uint8_t status = VL53L7CX_STATUS_OK;
-    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer,
-                                     VL53L7CX_DCI_VHV_CONFIG, 16);
+    status |= vl53l7cx_dci_read_data(p_dev, (uint8_t *)p_dev->temp_buffer, VL53L7CX_DCI_VHV_CONFIG, 16);
 
-    *p_repeat_count = ((uint32_t)p_dev->temp_buffer[7] << 24) |
-                      ((uint32_t)p_dev->temp_buffer[6] << 16) |
-                      ((uint32_t)p_dev->temp_buffer[5] << 8) |
-                      (uint32_t)p_dev->temp_buffer[4];
+    *p_repeat_count = ((uint32_t)p_dev->temp_buffer[7] << 24) | ((uint32_t)p_dev->temp_buffer[6] << 16) |
+                      ((uint32_t)p_dev->temp_buffer[5] << 8) | (uint32_t)p_dev->temp_buffer[4];
 
     return status;
 }
 
-uint8_t vl53l7cx_set_VHV_repeat_count(VL53L7CX_Configuration *p_dev,
-                                      uint32_t repeat_count) {
+uint8_t vl53l7cx_set_VHV_repeat_count(VL53L7CX_Configuration *p_dev, uint32_t repeat_count) {
     uint8_t status = VL53L7CX_STATUS_OK;
-    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer,
-                                        VL53L7CX_DCI_VHV_CONFIG, 16,
+    status |= vl53l7cx_dci_replace_data(p_dev, p_dev->temp_buffer, VL53L7CX_DCI_VHV_CONFIG, 16,
                                         (uint8_t *)&repeat_count, 4, 0x4);
     return status;
 }
 
-uint8_t vl53l7cx_dci_read_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
-                               uint32_t index, uint16_t data_size) {
+uint8_t vl53l7cx_dci_read_data(VL53L7CX_Configuration *p_dev, uint8_t *data, uint32_t index, uint16_t data_size) {
     int16_t i;
     uint8_t status = VL53L7CX_STATUS_OK;
     uint32_t rd_size = (uint32_t)data_size + (uint32_t)12;
-    uint8_t cmd[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                     0x00, 0x0f, 0x00, 0x02, 0x00, 0x08};
+    uint8_t cmd[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x00, 0x02, 0x00, 0x08};
 
     /* Check if tmp buffer is large enough */
     if ((data_size + (uint16_t)12) > (uint16_t)VL53L7CX_TEMPORARY_BUFFER_SIZE) {
@@ -1110,15 +972,11 @@ uint8_t vl53l7cx_dci_read_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
         cmd[3] = (uint8_t)((data_size & (uint16_t)0xf) << 4);
 
         /* Request data reading from FW */
-        status |= VL53L7CX_WrMulti(&(p_dev->platform),
-                                   (VL53L7CX_UI_CMD_END - (uint16_t)11), cmd,
-                                   sizeof(cmd));
-        status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS,
-                                            0xff, 0x03);
+        status |= VL53L7CX_WrMulti(&(p_dev->platform), (VL53L7CX_UI_CMD_END - (uint16_t)11), cmd, sizeof(cmd));
+        status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS, 0xff, 0x03);
 
         /* Read new data sent (4 bytes header + data_size + 8 bytes footer) */
-        status |= VL53L7CX_RdMulti(&(p_dev->platform), VL53L7CX_UI_CMD_START,
-                                   p_dev->temp_buffer, rd_size);
+        status |= VL53L7CX_RdMulti(&(p_dev->platform), VL53L7CX_UI_CMD_START, p_dev->temp_buffer, rd_size);
         VL53L7CX_SwapBuffer(p_dev->temp_buffer, data_size + (uint16_t)12);
 
         /* Copy data from FW into input structure (-4 bytes to remove header) */
@@ -1130,8 +988,7 @@ uint8_t vl53l7cx_dci_read_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
     return status;
 }
 
-uint8_t vl53l7cx_dci_write_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
-                                uint32_t index, uint16_t data_size) {
+uint8_t vl53l7cx_dci_write_data(VL53L7CX_Configuration *p_dev, uint8_t *data, uint32_t index, uint16_t data_size) {
     uint8_t status = VL53L7CX_STATUS_OK;
     int16_t i;
 
@@ -1145,8 +1002,7 @@ uint8_t vl53l7cx_dci_write_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
                         (uint8_t)((data_size + (uint16_t)8) >> 8),
                         (uint8_t)((data_size + (uint16_t)8) & (uint8_t)0xFF)};
 
-    uint16_t address = (uint16_t)VL53L7CX_UI_CMD_END -
-                       (data_size + (uint16_t)12) + (uint16_t)1;
+    uint16_t address = (uint16_t)VL53L7CX_UI_CMD_END - (data_size + (uint16_t)12) + (uint16_t)1;
 
     /* Check if cmd buffer is large enough */
     if ((data_size + (uint16_t)12) > (uint16_t)VL53L7CX_TEMPORARY_BUFFER_SIZE) {
@@ -1165,15 +1021,12 @@ uint8_t vl53l7cx_dci_write_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
 
         /* Add headers and footer */
         (void)memcpy(&p_dev->temp_buffer[0], headers, sizeof(headers));
-        (void)memcpy(&p_dev->temp_buffer[data_size + (uint16_t)4], footer,
-                     sizeof(footer));
+        (void)memcpy(&p_dev->temp_buffer[data_size + (uint16_t)4], footer, sizeof(footer));
 
         /* Send data to FW */
-        status |=
-            VL53L7CX_WrMulti(&(p_dev->platform), address, p_dev->temp_buffer,
-                             (uint32_t)((uint32_t)data_size + (uint32_t)12));
-        status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS,
-                                            0xff, 0x03);
+        status |= VL53L7CX_WrMulti(&(p_dev->platform), address, p_dev->temp_buffer,
+                                   (uint32_t)((uint32_t)data_size + (uint32_t)12));
+        status |= _vl53l7cx_poll_for_answer(p_dev, 4, 1, VL53L7CX_UI_CMD_STATUS, 0xff, 0x03);
 
         VL53L7CX_SwapBuffer(data, data_size);
     }
@@ -1181,10 +1034,8 @@ uint8_t vl53l7cx_dci_write_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
     return status;
 }
 
-uint8_t vl53l7cx_dci_replace_data(VL53L7CX_Configuration *p_dev, uint8_t *data,
-                                  uint32_t index, uint16_t data_size,
-                                  uint8_t *new_data, uint16_t new_data_size,
-                                  uint16_t new_data_pos) {
+uint8_t vl53l7cx_dci_replace_data(VL53L7CX_Configuration *p_dev, uint8_t *data, uint32_t index, uint16_t data_size,
+                                  uint8_t *new_data, uint16_t new_data_size, uint16_t new_data_pos) {
     uint8_t status = VL53L7CX_STATUS_OK;
 
     status |= vl53l7cx_dci_read_data(p_dev, data, index, data_size);

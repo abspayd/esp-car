@@ -1,2 +1,6 @@
 idf_component_register(SRCS "main.c"
-                    INCLUDE_DIRS ".")
+					"sensors/tof.c"
+					"sensors/imu.c"
+                    INCLUDE_DIRS "."
+                    INCLUDE_DIRS "include"
+				)

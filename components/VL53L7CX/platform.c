@@ -15,8 +15,7 @@
 #include "driver/i2c_master.h"
 #include "freertos/idf_additions.h"
 
-uint8_t VL53L7CX_RdByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
-                        uint8_t *p_value) {
+uint8_t VL53L7CX_RdByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress, uint8_t *p_value) {
     uint8_t status = 0;
 
     uint8_t buf[2] = {
@@ -25,8 +24,7 @@ uint8_t VL53L7CX_RdByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
     };
 
     esp_err_t error =
-        i2c_master_transmit_receive(p_platform->dev_handle, buf, 2, p_value, 1,
-                                    VL53L7CX_REQUEST_TIMEOUT_MS);
+        i2c_master_transmit_receive(p_platform->dev_handle, buf, 2, p_value, 1, VL53L7CX_REQUEST_TIMEOUT_MS);
     if (error != ESP_OK) {
         status |= 1;
     }
@@ -34,8 +32,7 @@ uint8_t VL53L7CX_RdByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
     return status;
 }
 
-uint8_t VL53L7CX_WrByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
-                        uint8_t value) {
+uint8_t VL53L7CX_WrByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress, uint8_t value) {
     uint8_t status = 0;
 
     uint8_t buf[3] = {
@@ -44,8 +41,7 @@ uint8_t VL53L7CX_WrByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
         value,
     };
 
-    esp_err_t error = i2c_master_transmit(p_platform->dev_handle, buf, 3,
-                                          VL53L7CX_REQUEST_TIMEOUT_MS);
+    esp_err_t error = i2c_master_transmit(p_platform->dev_handle, buf, 3, VL53L7CX_REQUEST_TIMEOUT_MS);
     if (error != ESP_OK) {
         status |= 1;
     }
@@ -53,8 +49,7 @@ uint8_t VL53L7CX_WrByte(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
     return status;
 }
 
-uint8_t VL53L7CX_WrMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
-                         uint8_t *p_values, uint32_t size) {
+uint8_t VL53L7CX_WrMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress, uint8_t *p_values, uint32_t size) {
     uint8_t status = 0;
 
     const uint32_t CHUNK_SIZE = 256;
@@ -74,8 +69,7 @@ uint8_t VL53L7CX_WrMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
         buf[1].buffer_size = n;
         buf[1].write_buffer = p;
 
-        status = i2c_master_multi_buffer_transmit(
-            p_platform->dev_handle, buf, 2, VL53L7CX_REQUEST_TIMEOUT_MS);
+        status = i2c_master_multi_buffer_transmit(p_platform->dev_handle, buf, 2, VL53L7CX_REQUEST_TIMEOUT_MS);
 
         if (status) {
             return 1;
@@ -89,8 +83,7 @@ uint8_t VL53L7CX_WrMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
     return status;
 }
 
-uint8_t VL53L7CX_RdMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
-                         uint8_t *p_values, uint32_t size) {
+uint8_t VL53L7CX_RdMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress, uint8_t *p_values, uint32_t size) {
     uint8_t status = 0;
 
     uint8_t buf[2] = {
@@ -98,8 +91,7 @@ uint8_t VL53L7CX_RdMulti(VL53L7CX_Platform *p_platform, uint16_t RegisterAdress,
         (uint8_t)(RegisterAdress & 0xFF),
     };
     esp_err_t error =
-        i2c_master_transmit_receive(p_platform->dev_handle, buf, 2, p_values,
-                                    size, VL53L7CX_REQUEST_TIMEOUT_MS);
+        i2c_master_transmit_receive(p_platform->dev_handle, buf, 2, p_values, size, VL53L7CX_REQUEST_TIMEOUT_MS);
     if (error != ESP_OK) {
         status |= 1;
     }
@@ -135,8 +127,7 @@ void VL53L7CX_SwapBuffer(uint8_t *buffer, uint16_t size) {
 
     /* Example of possible implementation using <string.h> */
     for (i = 0; i < size; i = i + 4) {
-        tmp = (buffer[i] << 24) | (buffer[i + 1] << 16) | (buffer[i + 2] << 8) |
-              (buffer[i + 3]);
+        tmp = (buffer[i] << 24) | (buffer[i + 1] << 16) | (buffer[i + 2] << 8) | (buffer[i + 3]);
 
         memcpy(&(buffer[i]), &tmp, 4);
     }
