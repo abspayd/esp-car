@@ -7,6 +7,7 @@
 #include "freertos/idf_additions.h"
 #include "portmacro.h"
 #include "sh2_spi.h"
+#include "shtp.h"
 
 #define SPI_MOSI_GPIO CONFIG_SPI_MOSI_GPIO
 #define SPI_MISO_GPIO CONFIG_SPI_MISO_GPIO
@@ -109,6 +110,8 @@ int spi_read(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_us) {
 
     int res = 0;
 
+    // printf("Buffer length: %lu, request length: %u\n", rx_buffer_len, len);
+
     if (len >= rx_buffer_len) {
         memcpy(pBuffer, rx_buffer, rx_buffer_len);
 
@@ -167,6 +170,8 @@ int spi_write(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len) {
         return 0;
     }
 
+    rx_buffer_len += read_length;
+
     spi_device_release_bus(spi_dev_handle);
 
     return len;
@@ -175,4 +180,4 @@ int spi_write(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len) {
 // This function should return a 32-bit value representing a
 // microsecond counter.  The count may roll over after 2^32
 // microseconds.
-uint32_t spi_getTimeUs(sh2_Hal_t *self) { return (uint32_t)esp_timer_get_time(); }
+uint32_t spi_getTimeUs(sh2_Hal_t *self) { return esp_timer_get_time(); }

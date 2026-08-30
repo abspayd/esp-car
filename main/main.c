@@ -4,6 +4,7 @@
 #include "driver/i2c_types.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
 #include "hal/i2c_types.h"
@@ -88,10 +89,14 @@ void app_main(void) {
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &vl53l7cx_dev_cfg, &vl53l7cx_dev.platform.dev_handle));
 
-    // BNO085_Init();
+    // TODO: move IMU stuff to its own task
+    //	- This stuff is getting timed out, and I'm guessing it's because
+    //	it's hijacking the main task.
+    BNO085_Init();
     // TODO: try to read data from the IMU
+    BNO085_Read_Accelerometer();
 
-    xTaskCreate(tof_task, "tof", 1024 * 3, NULL, 2, NULL);
+    // xTaskCreate(tof_task, "tof", 1024 * 3, NULL, 2, NULL);
 
     vTaskSuspend(NULL);
 }
