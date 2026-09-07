@@ -92,11 +92,13 @@ void app_main(void) {
     // TODO: move IMU stuff to its own task
     //	- This stuff is getting timed out, and I'm guessing it's because
     //	it's hijacking the main task.
-    BNO085_Init();
+    // BNO085_Init();
     // TODO: try to read data from the IMU
-    BNO085_Read_Accelerometer();
+    // BNO085_Read_Accelerometer();
 
     // xTaskCreate(tof_task, "tof", 1024 * 3, NULL, 2, NULL);
+    // imu_task(NULL);
+    xTaskCreate(imu_task, "imu", 1024 * 2, NULL, 2, NULL);
 
     vTaskSuspend(NULL);
 }
