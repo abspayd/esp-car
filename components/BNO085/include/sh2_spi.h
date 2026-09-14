@@ -49,6 +49,6 @@ extern int spi_write(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len);
 // microseconds.
 extern uint32_t spi_getTimeUs(sh2_Hal_t *self);
 
-extern sh2_Hal_t sh2_hal;
+extern sh2_Hal_t *sh2_hal_init(void);
 
 #endif

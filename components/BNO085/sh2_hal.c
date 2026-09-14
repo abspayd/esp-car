@@ -9,7 +9,8 @@
 #include "portmacro.h"
 #include "sh2_err.h"
 #include "sh2_spi.h"
-#include <ctype.h>
+
+#define INCLUDE_vTaskSuspend 1
 
 #define SPI_MOSI_GPIO CONFIG_SPI_MOSI_GPIO
 #define SPI_MISO_GPIO CONFIG_SPI_MISO_GPIO
@@ -19,6 +20,8 @@
 #define BNO085_RESET_GPIO CONFIG_BNO085_RESET_GPIO
 #define BNO085_INTERRUPT_GPIO CONFIG_BNO085_INTERRUPT_GPIO
 #define BNO085_WAKE_GPIO CONFIG_BNO085_WAKE_GPIO
+
+static SemaphoreHandle_t spi_transmit_lock;
 
 typedef enum {
     SPI_INIT,
@@ -33,30 +36,62 @@ typedef enum {
 typedef enum {
     EVENT_INTERRUPT,
     EVENT_SPI_COMPLETE,
+    EVENT_CLOSE,
 } event_type_t;
 
 static spi_state_t spi_state = SPI_INIT;
 static volatile bool rx_ready = false;
 static volatile bool is_open = false;
 
+static volatile uint32_t rx_timestamp_us;
+
 static spi_bus_config_t spi_bus_cfg;
 static spi_device_handle_t spi_dev_handle;
 
-static uint8_t tx_buffer[SOC_SPI_MAXIMUM_BUFFER_SIZE];
+DMA_ATTR uint8_t tx_zeros[SH2_HAL_MAX_TRANSFER_IN] = {0};
+DMA_ATTR uint8_t tx_buffer[SH2_HAL_MAX_TRANSFER_OUT] = {0};
+DMA_ATTR uint8_t rx_buffer[SH2_HAL_MAX_TRANSFER_IN] = {0};
 static volatile uint32_t tx_buffer_len;
-
-static uint8_t rx_buffer[SOC_SPI_MAXIMUM_BUFFER_SIZE];
 static volatile uint32_t rx_buffer_len;
 
 static QueueHandle_t event_queue = NULL;
 
-sh2_Hal_t sh2_hal = {
-    .open = spi_open,
-    .close = spi_close,
-    .read = spi_read,
-    .write = spi_write,
-    .getTimeUs = spi_getTimeUs,
-};
+static sh2_Hal_t sh2_hal;
+
+sh2_Hal_t *sh2_hal_init(void) {
+
+    sh2_hal.open = spi_open;
+    sh2_hal.close = spi_close;
+    sh2_hal.read = spi_read;
+    sh2_hal.write = spi_write;
+    sh2_hal.getTimeUs = spi_getTimeUs;
+
+    return &sh2_hal;
+}
+
+static int spi_transmit(spi_device_handle_t handle, uint8_t *rx_buffer, uint8_t *tx_buffer, uint32_t len) {
+    esp_err_t err;
+    if (xSemaphoreTake(spi_transmit_lock, 10 / portTICK_PERIOD_MS)) {
+        spi_transaction_t t = {
+            .length = len * 8,
+            .tx_buffer = tx_buffer,
+            .rx_buffer = rx_buffer,
+        };
+
+        err = spi_device_polling_transmit(handle, &t);
+        if (err != ESP_OK) {
+            ESP_LOGE("spi_transmit", "SPI transmit error: %s", esp_err_to_name(err));
+            return err;
+        }
+        xSemaphoreGive(spi_transmit_lock);
+    } else {
+        ESP_LOGE("spi_transmit", "Unable to take transmission lock");
+        xSemaphoreGive(spi_transmit_lock);
+        return 1;
+    }
+
+    return 0;
+}
 
 static void spi_dummy_op(void) {
     uint8_t dummy_rx[1];
@@ -64,19 +99,7 @@ static void spi_dummy_op(void) {
 
     memset(dummy_tx, 0xAA, sizeof(dummy_tx));
 
-    spi_transaction_t t = {
-        .length = sizeof(dummy_tx) * 8,
-        .tx_buffer = dummy_tx,
-        .rx_buffer = dummy_rx,
-    };
-
-    printf("transmit start\n");
-    esp_err_t err = spi_device_transmit(spi_dev_handle, &t);
-    printf("transmit end\n");
-    if (err != ESP_OK) {
-        ESP_LOGE("spi_dummy_op", "Error reading transmission: %s", esp_err_to_name(err));
-        return;
-    }
+    spi_transmit(spi_dev_handle, dummy_rx, dummy_tx, sizeof(dummy_tx));
 }
 
 static void interrupt_handler(void *arg) {
@@ -94,38 +117,16 @@ static void spi_activate(void) {
     // enable csn
     gpio_set_level(BNO085_SPI_CSN_GPIO, 0);
 
-    esp_err_t err;
-
-    err = spi_device_acquire_bus(spi_dev_handle, portMAX_DELAY);
-    if (err != ESP_OK) {
-        ESP_LOGE("spi_activate", "Failed to acquire SPI bus: %s", esp_err_to_name(err));
-        return;
-    }
-
-    size_t len = tx_buffer_len;
-    uint8_t *buf = tx_buffer;
-    if (len == 0) {
-        // SHTP header
-        buf = (uint8_t[4]){0};
-        len = 4;
-
-        spi_state = SPI_RD_HDR;
-    } else {
+    if (tx_buffer_len > 0) {
         spi_state = SPI_WRITE;
-    }
 
-    spi_transaction_t t = {
-        .length = len * 8,
-        .tx_buffer = buf,
-        .rx_buffer = rx_buffer,
-    };
+        spi_transmit(spi_dev_handle, rx_buffer, tx_buffer, tx_buffer_len);
 
-    printf("transmit start\n");
-    err = spi_device_transmit(spi_dev_handle, &t);
-    printf("transmit end\n");
-    if (err != ESP_OK) {
-        ESP_LOGE("spi_activate", "Error reading transmission: %s", esp_err_to_name(err));
-        return;
+        // de-assert wake
+        gpio_set_level(BNO085_WAKE_GPIO, 1);
+    } else {
+        spi_state = SPI_RD_HDR;
+        spi_transmit(spi_dev_handle, rx_buffer, tx_zeros, 4);
     }
 
     return;
@@ -146,19 +147,7 @@ static void spi_completed(void) {
         if (rx_len > 4) {
             spi_state = SPI_RD_BODY;
 
-            spi_transaction_t t = {
-                .length = (rx_len - 4) * 8,
-                .tx_buffer = NULL,
-                .rx_buffer = rx_buffer + 4,
-            };
-
-            printf("transmit start\n");
-            esp_err_t err = spi_device_transmit(spi_dev_handle, &t);
-            printf("transmit end\n");
-            if (err != ESP_OK) {
-                ESP_LOGE("spi_completed", "Error reading body: %s", esp_err_to_name(err));
-                return;
-            }
+            spi_transmit(spi_dev_handle, rx_buffer + 4, tx_zeros, rx_len - 4);
         } else {
             // disable csn
             gpio_set_level(BNO085_SPI_CSN_GPIO, 1);
@@ -167,8 +156,6 @@ static void spi_completed(void) {
             spi_state = SPI_IDLE;
 
             spi_activate();
-
-            spi_device_release_bus(spi_dev_handle);
         }
 
         break;
@@ -181,8 +168,6 @@ static void spi_completed(void) {
         spi_state = SPI_IDLE;
 
         spi_activate();
-
-        spi_device_release_bus(spi_dev_handle);
         break;
     case SPI_WRITE:
         // disable csn
@@ -190,13 +175,11 @@ static void spi_completed(void) {
 
         rx_buffer_len = (tx_buffer_len < rx_len) ? tx_buffer_len : rx_len;
 
-        tx_buffer_len = 0;
-
         spi_state = SPI_IDLE;
 
-        spi_activate();
+        tx_buffer_len = 0;
 
-        spi_device_release_bus(spi_dev_handle);
+        spi_activate();
         break;
     default:
         break;
@@ -209,7 +192,7 @@ static void event_listener_task(void *arg) {
         if (xQueueReceive(event_queue, &e, portMAX_DELAY)) {
             switch (e) {
             case EVENT_INTERRUPT:
-                // printf("BNO085 Interrupt detected\n");
+                rx_timestamp_us = (uint32_t)esp_timer_get_time();
 
                 rx_ready = true;
 
@@ -220,8 +203,11 @@ static void event_listener_task(void *arg) {
                     spi_completed();
                 }
                 break;
+            case EVENT_CLOSE:
+                vTaskDelete(NULL);
+                break;
             default:
-                ESP_LOGE("event_listener_task", "UNKNOWN EVEVENT: %d", e);
+                // Ignore unknown events
                 break;
             }
         }
@@ -230,7 +216,7 @@ static void event_listener_task(void *arg) {
 
 static void spi_completed_callback(spi_transaction_t *t) {
     event_type_t e = EVENT_SPI_COMPLETE;
-    xQueueSend(event_queue, &e, 0);
+    xQueueSendFromISR(event_queue, &e, NULL);
 }
 
 void enable_gpio_pins(void) {
@@ -240,7 +226,7 @@ void enable_gpio_pins(void) {
 
     gpio_set_direction(BNO085_INTERRUPT_GPIO, GPIO_MODE_INPUT);
 
-    event_queue = xQueueCreate(10, sizeof(event_type_t));
+    event_queue = xQueueCreate(1, sizeof(event_type_t));
     xTaskCreate(event_listener_task, "bno085_interrupt_task", 2048, NULL, 10, NULL);
 
     gpio_install_isr_service(0);
@@ -270,12 +256,19 @@ void reset_device(void) {
 // ensure communications start from a known state.
 int spi_open(sh2_Hal_t *self) {
 
-    // TODO: use logic analyzer to read MOSI, MISO, SCK, and CS pins
-    // try figure out why headers aren't being received
-
     enable_gpio_pins();
 
     is_open = true;
+
+    rx_buffer_len = 0;
+    tx_buffer_len = 0;
+
+    spi_transmit_lock = xSemaphoreCreateBinary();
+    if (spi_transmit_lock == NULL) {
+        ESP_LOGE("spi_open", "Failed to create binary semaphore lock");
+    } else {
+        xSemaphoreGive(spi_transmit_lock);
+    }
 
     // disable csn
     gpio_set_level(BNO085_SPI_CSN_GPIO, 1);
@@ -288,17 +281,20 @@ int spi_open(sh2_Hal_t *self) {
         .quadhd_io_num = -1,
     };
 
+    // ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &spi_bus_cfg, SPI_DMA_DISABLED));
     ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &spi_bus_cfg, SPI_DMA_CH_AUTO));
     spi_device_interface_config_t spi_dev_cfg = {
         .clock_source = SPI_CLK_SRC_DEFAULT,
         .clock_speed_hz = 3 * 1000 * 1000,
         .post_cb = spi_completed_callback,
+        .spics_io_num = -1,
         .mode = 3,
         .queue_size = 1,
     };
 
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &spi_dev_cfg, &spi_dev_handle));
 
+    gpio_set_level(BNO085_WAKE_GPIO, 1);
     reset_device();
 
     gpio_intr_enable(BNO085_INTERRUPT_GPIO);
@@ -312,6 +308,8 @@ int spi_open(sh2_Hal_t *self) {
 // It should put the device in reset then de-initialize any
 // peripherals or hardware resources that were used.
 void spi_close(sh2_Hal_t *self) {
+    ESP_LOGI("spi_close", "Closing SPI");
+
     reset_device();
 
     // disable csn
@@ -320,6 +318,9 @@ void spi_close(sh2_Hal_t *self) {
     spi_state = SPI_INIT;
 
     is_open = false;
+
+    // event_type_t e = EVENT_CLOSE;
+    // xQueueSend(event_queue, &e, 0);
 }
 
 // This function supports reading data from the sensor hub.
@@ -341,30 +342,18 @@ int spi_read(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_us) {
 
     int res = 0;
 
-    // printf("Buffer length: %lu, request length: %u\n", rx_buffer_len, len);
-
     if (rx_buffer_len > 0) {
-
-        // printf("rx_buffer_len: %ld, len: %d\n", rx_buffer_len, len);
 
         if (len >= rx_buffer_len) {
             memcpy(pBuffer, rx_buffer, rx_buffer_len);
 
             res = rx_buffer_len;
 
-            *t_us = (uint32_t)esp_timer_get_time();
-
-            for (int i = 0; i < rx_buffer_len; i++) {
-                if (isalnum((char)rx_buffer[i])) {
-                    printf("0x%02X - %c\n", rx_buffer[i], rx_buffer[i]);
-                } else {
-                    printf("0x%02X\n", rx_buffer[i]);
-                }
-            }
+            *t_us = rx_timestamp_us;
 
             rx_buffer_len = 0;
-
         } else {
+            res = SH2_ERR_BAD_PARAM;
             rx_buffer_len = 0;
         }
 
@@ -389,7 +378,7 @@ int spi_read(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len, uint32_t *t_us) {
 // the data can continue after this function returns.
 int spi_write(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len) {
 
-    if (self == 0 || len > SOC_SPI_MAXIMUM_BUFFER_SIZE || (len > 0 && pBuffer == 0)) {
+    if (self == 0 || len > sizeof(tx_buffer) || (len > 0 && pBuffer == 0)) {
         return SH2_ERR_BAD_PARAM;
     }
 
@@ -402,6 +391,10 @@ int spi_write(sh2_Hal_t *self, uint8_t *pBuffer, unsigned len) {
     memcpy(tx_buffer, pBuffer, len);
     tx_buffer_len = len;
     res = len;
+
+    gpio_intr_disable(BNO085_INTERRUPT_GPIO);
+    gpio_set_level(BNO085_WAKE_GPIO, 0);
+    gpio_intr_enable(BNO085_INTERRUPT_GPIO);
 
     return res;
 }

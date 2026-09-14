@@ -98,7 +98,7 @@ void app_main(void) {
 
     // xTaskCreate(tof_task, "tof", 1024 * 3, NULL, 2, NULL);
     // imu_task(NULL);
-    xTaskCreate(imu_task, "imu", 1024 * 2, NULL, 2, NULL);
+    xTaskCreate(imu_task, "imu", 1024 * 3, NULL, 2, NULL);
 
     vTaskSuspend(NULL);
 }

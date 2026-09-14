@@ -2,6 +2,7 @@
 #include "BNO085.h"
 #include "freertos/idf_additions.h"
 #include "portmacro.h"
+#include "sh2.h"
 
 static bool bno_initialized = false;
 
@@ -11,10 +12,10 @@ void imu_task(void *args) {
     }
 
     for (;;) {
-        vTaskDelay(1 / portTICK_PERIOD_MS);
+        sh2_service();
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-    // TODO
-    // BNO085_Read_Gyro();
-    // BNO085_Read_Accelerometer();
-    // BNO085_Read_Magnetometer();
+
+    // vTaskDelete(NULL);
 }
