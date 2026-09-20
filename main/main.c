@@ -4,8 +4,6 @@
 #include "driver/i2c_types.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "esp_timer.h"
-#include "freertos/FreeRTOS.h"
 #include "freertos/idf_additions.h"
 #include "hal/i2c_types.h"
 #include "platform.h"
@@ -13,7 +11,6 @@
 #include "sensors/imu.h"
 #include "sensors/tof.h"
 #include "vl53l7cx_api.h"
-#include <stdio.h>
 
 #define LED_GPIO CONFIG_LED_GPIO
 #define ONBOARD_LED_GPIO CONFIG_ONBOARD_LED_GPIO
@@ -89,16 +86,25 @@ void app_main(void) {
     };
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus_handle, &vl53l7cx_dev_cfg, &vl53l7cx_dev.platform.dev_handle));
 
-    // TODO: move IMU stuff to its own task
-    //	- This stuff is getting timed out, and I'm guessing it's because
-    //	it's hijacking the main task.
-    // BNO085_Init();
-    // TODO: try to read data from the IMU
-    // BNO085_Read_Accelerometer();
-
     // xTaskCreate(tof_task, "tof", 1024 * 3, NULL, 2, NULL);
-    // imu_task(NULL);
     xTaskCreate(imu_task, "imu", 1024 * 3, NULL, 2, NULL);
+
+    printf("\e[2J\e[H");
+    for (;;) {
+        printf("\e[H");
+
+        sh2_SensorValue_t v;
+        v = BNO085_Read_Accelerometer();
+        printf("Accelerometer:\t% 05.3f % 05.3f % 05.3f\n", v.un.linearAcceleration.x, v.un.linearAcceleration.y,
+               v.un.linearAcceleration.z);
+        v = BNO085_Read_Gyroscope();
+        printf("Gyroscope:\t% 05.3f % 05.3f % 05.3f\n", v.un.gyroscope.x, v.un.gyroscope.y, v.un.gyroscope.z);
+        v = BNO085_Read_Magnetometer();
+        printf("Magnetometer:\t% 05.3f % 05.3f % 05.3f\n", v.un.magneticField.x, v.un.magneticField.y,
+               v.un.magneticField.z);
+
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
 
     vTaskSuspend(NULL);
 }

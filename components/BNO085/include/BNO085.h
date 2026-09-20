@@ -1,10 +1,7 @@
 #ifndef BNO085_H
 #define BNO085_H
 
-#include "driver/spi_master.h"
-#include "sh2_hal.h"
-#include <math.h>
-#include <stdint.h>
+#include "sh2_SensorValue.h"
 
 #define BNO085_REQUEST_TIMEOUT_MS CONFIG_BNO085_REQUEST_TIMEOUT_MS
 
@@ -22,8 +19,8 @@
 
 extern void BNO085_Init(void);
 
-extern double_t BNO085_Read_Gyro(void);
-extern double_t BNO085_Read_Accelerometer(void);
-extern double_t BNO085_Read_Magnetometer(void);
+extern sh2_SensorValue_t BNO085_Read_Gyroscope(void);
+extern sh2_SensorValue_t BNO085_Read_Accelerometer(void);
+extern sh2_SensorValue_t BNO085_Read_Magnetometer(void);
 
 #endif

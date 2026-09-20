@@ -319,8 +319,8 @@ void spi_close(sh2_Hal_t *self) {
 
     is_open = false;
 
-    // event_type_t e = EVENT_CLOSE;
-    // xQueueSend(event_queue, &e, 0);
+    event_type_t e = EVENT_CLOSE;
+    xQueueSend(event_queue, &e, 0);
 }
 
 // This function supports reading data from the sensor hub.

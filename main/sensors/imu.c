@@ -16,6 +16,5 @@ void imu_task(void *args) {
 
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-
     // vTaskDelete(NULL);
 }
