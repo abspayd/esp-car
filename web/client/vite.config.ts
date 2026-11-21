@@ -28,6 +28,12 @@ export default defineConfig({
 		  }
 	  }
   },
+  server: {
+	  proxy: {
+		  // TODO
+		  '/api': 'http://127.0.0.1:3000'
+	  }
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
