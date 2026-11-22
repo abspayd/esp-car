@@ -15,8 +15,6 @@ stdin.resume();
 
 stdin.setEncoding('utf-8');
 
-let connected: boolean = false;
-
 let pos: Position = {
 	x: 0,
 	y: 0,
