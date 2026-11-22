@@ -1,6 +1,4 @@
 import { type Request, type Response } from 'express';
-import { Writable } from 'stream';
-// import path from 'path';
 
 type Position = {
 	x: number,
@@ -28,6 +26,7 @@ const setPosition = async (req: Request, res: Response) => {
 };
 
 const stream = async (req: Request, res: Response) => {
+	// TODO: see if this is needed?
 };
 
 export { setPosition, stream };

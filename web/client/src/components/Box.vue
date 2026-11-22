@@ -16,6 +16,8 @@
 
 	let resizeObserver: ResizeObserver|null = null;
 
+	const websocket = new WebSocket('/socket');
+
 	onMounted(() => {
 		if (!canvasContainer.value) {
 			return;
@@ -56,8 +58,8 @@
 		camera.position.z = 5;
 
 		const animate = (time: DOMHighResTimeStamp) => {
-			cube.rotation.x = time / 2000;
-			cube.rotation.y = time / 1000;
+			// cube.rotation.x = time / 2000;
+			// cube.rotation.y = time / 1000;
 
 			renderer.render(scene, camera);
 		}
@@ -78,6 +80,24 @@
 		});
 
 		resizeObserver.observe(canvasContainer.value);
+
+		websocket.addEventListener('open', () => {
+			console.log('Websocket opened');
+		});
+
+		websocket.addEventListener('message', (ev) => {
+			
+			try {
+				const data = JSON.parse(ev.data);
+
+				cube.position.x = data.x;
+				cube.position.y = data.y;
+				cube.position.z = data.z;
+
+			} catch (e) {
+				console.log("Unable to parse payload");
+			}
+		})
 	});
 
 	onUnmounted(() => {
@@ -88,9 +108,11 @@
 		if (renderer) {
 			renderer.dispose();
 		}
-	})
 
-	const eventSource = new EventSource('localhost:3000/api/box_stream');
+		websocket.addEventListener('close', () => {
+			console.log('Websocket closed');
+		});
+	})
 
 </script>
 

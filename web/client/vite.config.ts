@@ -30,8 +30,11 @@ export default defineConfig({
   },
   server: {
 	  proxy: {
-		  // TODO
-		  '/api': 'http://127.0.0.1:3000'
+		  '/api': 'http://localhost:3000',
+		  '/socket': {
+			  target: 'ws://localhost:3001',
+			  ws: true
+		  }
 	  }
   },
   resolve: {
